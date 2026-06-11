@@ -361,72 +361,6 @@ class ShareStrmHelper:
 
         return full[: len(prefix)] == prefix
 
-    def _walk_share_dir(
-        self,
-        share_code: str,
-        share_pwd: str,
-        parent_id: int,
-        prefix: str,
-    ):
-        """
-        分层递归遍历分享目录，通过 max_depth=1 绕开服务端 1999 条单次截断；
-        若目录结构较深，共享根路径由 p123client 在每一层 yield 的 relpath 自然携带。
-        """
-        for item in share_iterdir(
-            client=self.client,
-            share_key=share_code,
-            share_pwd=share_pwd,
-            payload=parent_id,
-            cooldown=1,
-            max_depth=1,
-            keep_raw=True,
-        ):
-            # p123client 的 share_iterdir 在 max_depth=1 时，
-            # 顶层（parent对应share根）一般还会返回以 "/" 起始的 relpath；
-            # 若存在则直接信任其完整相对路径，否则按 "来自当前层" 的 name 拼接。
-            base = ("/" + item.get("relpath", "").lstrip("/")).rstrip("/")
-            if not base:
-                base = ("/" + prefix.lstrip("/") + "/" + item.get("name", ""))
-            base = base.replace("//", "/")
-            if item.get("is_dir"):
-                sub_id = item.get("id")
-                if sub_id is not None:
-                    yield from self._walk_share_dir(
-                        share_code=share_code,
-                        share_pwd=share_pwd,
-                        parent_id=int(sub_id),
-                        prefix=base,
-                    )
-                continue
-
-            file_path = base
-            # 兜底：若 p123client 未返回 relpath，则 fallback 到 prefix+name 的拼接
-            if not file_path or file_path == "/":
-                file_path = "/" + prefix.lstrip("/") + "/" + item.get("name", "")
-            file_path = file_path.replace("//", "/")
-
-            if not self.has_prefix(file_path, self.share_media_path):
-                logger.debug(
-                    "【分享STRM生成】此文件不在用户设置分享目录下，跳过网盘路径: %s",
-                    file_path.replace(self.share_media_path, "", 1),
-                )
-                continue
-
-            target_relative = Path(file_path).relative_to(self.share_media_path)
-            local_file_path = Path(self.local_media_path) / target_relative
-            file_target_dir = local_file_path.parent
-            file_name = local_file_path.stem + ".strm"
-            new_file_path = file_target_dir / file_name
-
-            raw = item.get("raw") or item
-            yield {
-                "file_path": local_file_path,
-                "file_name": file_name,
-                "file_target_dir": file_target_dir,
-                "new_file_path": new_file_path,
-                "raw": raw,
-            }
-
     def get_share_list_creata_strm(
         self,
         parent_id: int = 0,
@@ -444,38 +378,53 @@ class ShareStrmHelper:
         self.mediainfo_fail_dict = []
         self.download_mediainfo_list = []
 
-        for item in self._walk_share_dir(
-            share_code=share_code,
+        for item in share_iterdir(
+            client=self.client,
+            share_key=share_code,
             share_pwd=share_pwd,
-            parent_id=parent_id,
-            prefix="",
+            payload=parent_id,
+            cooldown=1,
+            max_depth=-1,
+            keep_raw=True,
         ):
-            local_file_path = Path(item["file_path"])
-            file_target_dir = Path(item["file_target_dir"])
-            file_name = item["file_name"]
-            new_file_path = Path(item["new_file_path"])
-            raw = item["raw"]
+            if item["is_dir"]:
+                continue
+            file_path = "/" + item["relpath"]
+            if not self.has_prefix(file_path, self.share_media_path):
+                logger.debug(
+                    "【分享STRM生成】此文件不在用户设置分享目录下，跳过网盘路径: %s",
+                    file_path.replace(self.share_media_path, "", 1),
+                )
+                continue
+            file_path = Path(self.local_media_path) / Path(file_path).relative_to(
+                self.share_media_path
+            )
+            file_target_dir = file_path.parent
+            file_name = file_path.stem + ".strm"
+            new_file_path = file_target_dir / file_name
+
+            item = item["raw"]
             try:
                 if self.auto_download_mediainfo:
-                    if local_file_path.suffix in self.download_mediaext:
+                    if file_path.suffix in self.download_mediaext:
                         self.download_mediainfo_list.append(
                             [
                                 {
-                                    "Etag": raw.get("Etag") or raw.get("md5"),
-                                    "FileID": int(raw.get("FileId") or raw.get("id") or 0),
-                                    "FileName": raw.get("FileName") or raw.get("name"),
-                                    "S3KeyFlag": raw.get("S3KeyFlag") or raw.get("s3keyflag"),
-                                    "Size": int(raw.get("Size") or raw.get("size") or 0),
+                                    "Etag": item["Etag"],
+                                    "FileID": int(item["FileId"]),
+                                    "FileName": item["FileName"],
+                                    "S3KeyFlag": item["S3KeyFlag"],
+                                    "Size": int(item["Size"]),
                                 },
-                                str(local_file_path),
+                                str(file_path),
                             ]
                         )
                         continue
 
-                if local_file_path.suffix not in self.rmt_mediaext:
+                if file_path.suffix not in self.rmt_mediaext:
                     logger.warn(
                         "【分享STRM生成】文件后缀不匹配，跳过网盘路径: %s",
-                        str(local_file_path).replace(str(self.local_media_path), "", 1),
+                        str(file_path).replace(str(self.local_media_path), "", 1),
                     )
                     continue
 
@@ -483,10 +432,9 @@ class ShareStrmHelper:
 
                 strm_url = (
                     f"{self.server_address}/api/v1/plugin/P123StrmSelfuse/redirect_url"
-                    f"?apikey={settings.API_TOKEN}&name={raw.get('FileName') or raw.get('name')}"
-                    f"&size={int(raw.get('Size') or raw.get('size') or 0)}"
-                    f"&md5={raw.get('Etag') or raw.get('md5')}"
-                    f"&s3_key_flag={raw.get('S3KeyFlag') or raw.get('s3keyflag')}"
+                    f"?apikey={settings.API_TOKEN}&name={item['FileName']}"
+                    f"&size={item['Size']}&md5={item['Etag']}"
+                    f"&s3_key_flag={item['S3KeyFlag']}"
                 )
 
                 with open(new_file_path, "w", encoding="utf-8") as file:
@@ -537,7 +485,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.1.6"
+    plugin_version = "1.1.7"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
