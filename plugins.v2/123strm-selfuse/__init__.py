@@ -361,14 +361,15 @@ class ShareStrmHelper:
 
         return full[: len(prefix)] == prefix
 
-    def get_share_list_creata_strm(
+    def _walk_share_dir(
         self,
-        parent_id: int = 0,
-        share_code: str = "",
-        share_pwd: str = "",
+        share_code: str,
+        share_pwd: str,
+        parent_id: int,
+        prefix: str,
     ):
         """
-        获取分享文件，生成 STRM
+        分层遍历分享目录，避免一次性枚举超长列表。
         """
         for item in share_iterdir(
             client=self.client,
@@ -376,37 +377,48 @@ class ShareStrmHelper:
             share_pwd=share_pwd,
             payload=parent_id,
             cooldown=1,
-            max_depth=-1,
+            max_depth=1,
             keep_raw=True,
         ):
-            if item["is_dir"]:
+            rel = "/" + prefix.lstrip("/") + "/" + item.get("name", "")
+            rel = rel.replace("//", "/")
+            if item.get("is_dir"):
+                sub_id = item.get("id")
+                if sub_id is not None:
+                    yield from self._walk_share_dir(
+                        share_code=share_code,
+                        share_pwd=share_pwd,
+                        parent_id=int(sub_id),
+                        prefix=rel,
+                    )
                 continue
-            file_path = "/" + item["relpath"]
+
+            file_path = "/" + item.get("relpath", rel.lstrip("/"))
             if not self.has_prefix(file_path, self.share_media_path):
                 logger.debug(
                     "【分享STRM生成】此文件不在用户设置分享目录下，跳过网盘路径: %s",
-                    str(file_path).replace(str(self.local_media_path), "", 1),
+                    file_path.replace(self.share_media_path, "", 1),
                 )
                 continue
-            file_path = Path(self.local_media_path) / Path(file_path).relative_to(
-                self.share_media_path
-            )
+
+            target_relative = Path(file_path).relative_to(self.share_media_path)
+            file_path = Path(self.local_media_path) / target_relative
             file_target_dir = file_path.parent
             file_name = file_path.stem + ".strm"
             new_file_path = file_target_dir / file_name
 
-            item = item["raw"]
+            raw = item.get("raw") or item
             try:
                 if self.auto_download_mediainfo:
                     if file_path.suffix in self.download_mediaext:
                         self.download_mediainfo_list.append(
                             [
                                 {
-                                    "Etag": item["Etag"],
-                                    "FileID": int(item["FileId"]),
-                                    "FileName": item["FileName"],
-                                    "S3KeyFlag": item["S3KeyFlag"],
-                                    "Size": int(item["Size"]),
+                                    "Etag": raw.get("Etag") or raw.get("md5"),
+                                    "FileID": int(raw.get("FileId") or raw.get("id") or 0),
+                                    "FileName": raw.get("FileName") or raw.get("name"),
+                                    "S3KeyFlag": raw.get("S3KeyFlag") or raw.get("s3keyflag"),
+                                    "Size": int(raw.get("Size") or raw.get("size") or 0),
                                 },
                                 str(file_path),
                             ]
@@ -424,9 +436,10 @@ class ShareStrmHelper:
 
                 strm_url = (
                     f"{self.server_address}/api/v1/plugin/P123StrmSelfuse/redirect_url"
-                    f"?apikey={settings.API_TOKEN}&name={item['FileName']}"
-                    f"&size={item['Size']}&md5={item['Etag']}"
-                    f"&s3_key_flag={item['S3KeyFlag']}"
+                    f"?apikey={settings.API_TOKEN}&name={raw.get('FileName') or raw.get('name')}"
+                    f"&size={int(raw.get('Size') or raw.get('size') or 0)}"
+                    f"&md5={raw.get('Etag') or raw.get('md5')}"
+                    f"&s3_key_flag={raw.get('S3KeyFlag') or raw.get('s3keyflag')}"
                 )
 
                 with open(new_file_path, "w", encoding="utf-8") as file:
@@ -444,6 +457,32 @@ class ShareStrmHelper:
                 self.strm_fail_count += 1
                 self.strm_fail_dict[str(new_file_path)] = str(e)
                 continue
+
+    def get_share_list_creata_strm(
+        self,
+        parent_id: int = 0,
+        share_code: str = "",
+        share_pwd: str = "",
+    ):
+        """
+        获取分享文件，生成 STRM
+        """
+        self.strm_count = 0
+        self.strm_fail_count = 0
+        self.strm_fail_dict = {}
+        self.mediainfo_count = 0
+        self.mediainfo_fail_count = 0
+        self.mediainfo_fail_dict = []
+        self.download_mediainfo_list = []
+
+        for item in self._walk_share_dir(
+            share_code=share_code,
+            share_pwd=share_pwd,
+            parent_id=parent_id,
+            prefix="",
+        ):
+            # items already processed inside _walk_share_dir
+            pass
 
         self.mediainfo_count, self.mediainfo_fail_count, self.mediainfo_fail_dict = (
             self._mediainfodownloader.auto_downloader(
