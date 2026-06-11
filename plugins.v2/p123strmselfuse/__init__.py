@@ -361,6 +361,54 @@ class ShareStrmHelper:
 
         return full[: len(prefix)] == prefix
 
+    def _share_recursive(
+        self,
+        share_code: str,
+        share_pwd: str,
+        parent_id: int = 0,
+        rel_prefix: str = "",
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        按目录逐层递归拉取分享文件，每次只请求一层（max_depth=1），
+        用 rel_prefix 手动维护完整相对路径，避免根目录一次性递归触发 1999 条截断。
+        """
+        try:
+            items = list(
+                share_iterdir(
+                    client=self.client,
+                    share_key=share_code,
+                    share_pwd=share_pwd,
+                    payload=parent_id,
+                    cooldown=1,
+                    max_depth=1,
+                    keep_raw=True,
+                )
+            )
+        except Exception as e:
+            logger.error(
+                "【分享STRM生成】拉取分享目录失败,parent_id=%s, error=%s",
+                parent_id,
+                e,
+            )
+            return
+
+        for item in items:
+            if item.get("is_dir"):
+                child_rel = rel_prefix + item.get("relpath", "")
+                yield from self._share_recursive(
+                    share_code=share_code,
+                    share_pwd=share_pwd,
+                    parent_id=item.get("id", 0),
+                    rel_prefix=child_rel,
+                )
+            else:
+                full_rel = rel_prefix + item.get("relpath", "")
+                yield {
+                    "file_path": "/" + full_rel,
+                    "relpath": full_rel,
+                    "raw": item.get("raw", item),
+                }
+
     def get_share_list_creata_strm(
         self,
         parent_id: int = 0,
@@ -378,15 +426,7 @@ class ShareStrmHelper:
         self.mediainfo_fail_dict = []
         self.download_mediainfo_list = []
 
-        for item in share_iterdir(
-            client=self.client,
-            share_key=share_code,
-            share_pwd=share_pwd,
-            payload=parent_id,
-            cooldown=1,
-            max_depth=-1,
-            keep_raw=True,
-        ):
+        for item in self._share_recursive(share_code, share_pwd):
             if item["is_dir"]:
                 continue
             file_path = "/" + item["relpath"]
@@ -485,7 +525,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.1.8"
+    plugin_version = "1.2.0"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
