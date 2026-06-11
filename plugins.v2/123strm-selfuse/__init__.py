@@ -268,7 +268,7 @@ class FullSyncStrmHelper:
                         new_file_path.parent.mkdir(parents=True, exist_ok=True)
 
                         strm_url = (
-                            f"{self.server_address}/api/v1/plugin/P123StrmHelper/redirect_url"
+                            f"{self.server_address}/api/v1/plugin/P123StrmSelfuse/redirect_url"
                             f"?apikey={settings.API_TOKEN}&name={item['FileName']}"
                             f"&size={item['Size']}&md5={item['Etag']}"
                             f"&s3_key_flag={item['S3KeyFlag']}"
@@ -423,7 +423,7 @@ class ShareStrmHelper:
                 new_file_path.parent.mkdir(parents=True, exist_ok=True)
 
                 strm_url = (
-                    f"{self.server_address}/api/v1/plugin/P123StrmHelper/redirect_url"
+                    f"{self.server_address}/api/v1/plugin/P123StrmSelfuse/redirect_url"
                     f"?apikey={settings.API_TOKEN}&name={item['FileName']}"
                     f"&size={item['Size']}&md5={item['Etag']}"
                     f"&s3_key_flag={item['S3KeyFlag']}"
@@ -465,7 +465,7 @@ class ShareStrmHelper:
             )
 
 
-class P123StrmHelper(_PluginBase):
+class P123StrmSelfuse(_PluginBase):
     """
     123 云盘 STRM 助手：生成 STRM、监控整理入库、分享生成 STRM、空间清理一条龙服务
     """
@@ -473,7 +473,7 @@ class P123StrmHelper(_PluginBase):
     # 插件名称
     plugin_name = "123STRM"
     # 插件描述
-    plugin_desc = "123云盘STRM生成一条龙服务"
+    plugin_desc = "123STRM生成一条龙服务"
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/DDSRem-Dev/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
@@ -483,7 +483,7 @@ class P123StrmHelper(_PluginBase):
     # 作者主页
     author_url = "https://github.com/DDSRem"
     # 插件配置项ID前缀
-    plugin_config_prefix = "123strm-selfuse_"
+    plugin_config_prefix = "p123strmselfuse_"
     # 加载顺序
     plugin_order = 99
     # 可使用的用户级别
@@ -667,7 +667,7 @@ class P123StrmHelper(_PluginBase):
 
     def get_api(self) -> List[Dict[str, Any]]:
         """
-        BASE_URL: {server_url}/api/v1/plugin/P123StrmHelper/redirect_url?apikey={APIKEY}
+        BASE_URL: {server_url}/api/v1/plugin/P123StrmSelfuse/redirect_url?apikey={APIKEY}
         0. 查询带 s3_key_flag
             url: ${BASE_URL}&name={name}&size={size}&md5={md5}&s3_key_flag={s3_key_flag}
         1. 查询不带 s3_key_flag
@@ -696,7 +696,7 @@ class P123StrmHelper(_PluginBase):
         ):
             cron_service.append(
                 {
-                    "id": "P123StrmHelper_full_sync_strm_files",
+                    "id": "P123StrmSelfuse_full_sync_strm_files",
                     "name": "定期全量同步123媒体库",
                     "trigger": CronTrigger.from_crontab(self._cron_full_sync_strm),
                     "func": self.full_sync_strm_files,
@@ -708,7 +708,7 @@ class P123StrmHelper(_PluginBase):
         ):
             cron_service.append(
                 {
-                    "id": "P123StrmHelper_main_cleaner",
+                    "id": "P123StrmSelfuse_main_cleaner",
                     "name": "定期清理123空间",
                     "trigger": CronTrigger.from_crontab(self._cron_clear),
                     "func": self.main_cleaner,
@@ -1797,7 +1797,7 @@ class P123StrmHelper(_PluginBase):
             return
 
         strm_url = (
-            f"{self.moviepilot_address.rstrip('/')}/api/v1/plugin/P123StrmHelper/redirect_url"
+            f"{self.moviepilot_address.rstrip('/')}/api/v1/plugin/P123StrmSelfuse/redirect_url"
             f"?apikey={settings.API_TOKEN}&name={item_dest_info['FileName']}"
             f"&size={item_dest_info['Size']}&md5={item_dest_info['Etag']}"
             f"&s3_key_flag={item_dest_info['S3KeyFlag']}"
