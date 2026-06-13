@@ -105,13 +105,15 @@ class MediaInfoDownloader:
             download_url=download_url,
         )
 
-    def auto_downloader(self, downloads_list: List):
+    def auto_downloader(self, downloads_list: List, subtitle_mode: bool = False):
         """
         根据列表自动下载
+        subtitle_mode=True 时降低并发阈值，用于字幕批量下载避免限流
         """
         mediainfo_count: int = 0
         mediainfo_fail_count: int = 0
         mediainfo_fail_dict: List = []
+        throttle = 10 if subtitle_mode else 50
         try:
             for item in downloads_list:
                 if not item:
@@ -135,7 +137,7 @@ class MediaInfoDownloader:
                     mediainfo_fail_dict.append(item[1])
                 else:
                     continue
-                if mediainfo_count % 50 == 0:
+                if mediainfo_count % throttle == 0:
                     logger.info("【媒体信息文件下载】休眠 2s 后继续下载")
                     time.sleep(2)
         except Exception as e:
@@ -466,7 +468,6 @@ class ShareStrmHelper:
                     continue
 
                 new_file_path.parent.mkdir(parents=True, exist_ok=True)
-
                 strm_url = (
                     f"{self.server_address}/api/v1/plugin/P123StrmSelfuse/redirect_url"
                     f"?apikey={settings.API_TOKEN}&name={item['FileName']}"
@@ -490,11 +491,27 @@ class ShareStrmHelper:
                 self.strm_fail_dict[str(new_file_path)] = str(e)
                 continue
 
-        self.mediainfo_count, self.mediainfo_fail_count, self.mediainfo_fail_dict = (
+        # 拆分字幕低并发下载，降低服务端限流触发概率
+        subtitle_ext = {s.lower() for s in self.download_mediaext}
+        subtitle_list = [
+            item for item in self.download_mediainfo_list
+            if item and Path(item[1]).suffix.lower() in subtitle_ext
+        ]
+        other_list = [
+            item for item in self.download_mediainfo_list
+            if item and item not in subtitle_list
+        ]
+        other_count, other_fail_count, other_fail_list = (
+            self._mediainfodownloader.auto_downloader(downloads_list=other_list)
+        )
+        sub_count, sub_fail_count, sub_fail_list = (
             self._mediainfodownloader.auto_downloader(
-                downloads_list=self.download_mediainfo_list
+                downloads_list=subtitle_list, subtitle_mode=True
             )
         )
+        self.mediainfo_count = other_count + sub_count
+        self.mediainfo_fail_count = other_fail_count + sub_fail_count
+        self.mediainfo_fail_dict = other_fail_list + sub_fail_list
         if self.strm_fail_dict:
             for path, error in self.strm_fail_dict.items():
                 logger.warn(f"【分享STRM生成】{path} 生成错误原因: {error}")
@@ -522,7 +539,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.2.4"
+    plugin_version = "1.2.5"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
