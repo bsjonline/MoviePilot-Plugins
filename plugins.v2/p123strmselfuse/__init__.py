@@ -1,4 +1,5 @@
 import ast
+import re
 import time
 from datetime import datetime, timedelta
 from typing import Any, List, Dict, Tuple, Optional, Generator
@@ -605,6 +606,9 @@ class P123StrmSelfuse(_PluginBase):
     _clear_recyclebin_enabled = False
     _clear_receive_path_enabled = False
     _cron_clear = None
+    _deduplicate_strm_enabled = False
+    _deduplicate_strm_paths = ""
+    _deduplicate_strm_keep_longest = True
 
     def init_plugin(self, config: dict = None):
         """
@@ -652,6 +656,9 @@ class P123StrmSelfuse(_PluginBase):
             self._clear_recyclebin_enabled = config.get("clear_recyclebin_enabled")
             self._clear_receive_path_enabled = config.get("clear_receive_path_enabled")
             self._cron_clear = config.get("cron_clear")
+            self._deduplicate_strm_enabled = config.get("deduplicate_strm_enabled")
+            self._deduplicate_strm_paths = config.get("deduplicate_strm_paths", "")
+            self._deduplicate_strm_keep_longest = config.get("deduplicate_strm_keep_longest", True)
             if not self._user_rmt_mediaext:
                 self._user_rmt_mediaext = "mp4,mkv,ts,iso,rmvb,avi,mov,mpeg,mpg,wmv,3gp,asf,m4v,flv,m2ts,tp,f4v"
             if not self._user_download_mediaext:
@@ -741,14 +748,20 @@ class P123StrmSelfuse(_PluginBase):
 
         return active_services
 
-    @staticmethod
-    def get_command() -> List[Dict[str, Any]]:
+    def get_command(self) -> List[Dict[str, Any]]:
         """
-        返回插件远程命令列表，本插件无远程命令
+        返回插件远程命令列表，包含手工 STRM 去重
 
         :return: None
         """
-        pass
+        commands = [{
+            "cmd": "/strm_dedup",
+            "title": "手工 STRM 去重",
+            "description": "读取配置的 STRM 目录，按 size+md5 去重，保留文件名最长的一条。",
+            "role": "admin",
+            "func": self.strm_dedup_files,
+        }]
+        return commands
 
     def get_api(self) -> List[Dict[str, Any]]:
         """
@@ -1270,7 +1283,98 @@ class P123StrmSelfuse(_PluginBase):
                     },
                 ],
             },
-        ]
+       
+            {
+                "component": "VRow",
+                "content": [
+                    {
+                        "component": "VCol",
+                        "props": {"cols": 12, "md": 4},
+                        "content": [
+                            {
+                                "component": "VSwitch",
+                                "props": {
+                                    "model": "deduplicate_strm_enabled",
+                                    "label": "启用 STRM 手工去重",
+                                },
+                            }
+                        ],
+                    },
+                    {
+                        "component": "VCol",
+                        "props": {"cols": 12, "md": 4},
+                        "content": [
+                            {
+                                "component": "VSwitch",
+                                "props": {
+                                    "model": "deduplicate_strm_keep_longest",
+                                    "label": "保留文件名最长的一条",
+                                },
+                            }
+                        ],
+                    },
+                    {
+                        "component": "VCol",
+                        "props": {"cols": 12, "md": 4},
+                        "content": [
+                            {
+                                "component": "VBtn",
+                                "props": {
+                                    "color": "error",
+                                    "variant": "flat",
+                                    "block": True,
+                                },
+                                "events": {
+                                    "click": "/strm_dedup"
+                                },
+                                "content": [
+                                    {
+                                        "component": "span",
+                                        "text": "执行去重"
+                                    }
+                                ]
+                            }
+                        ],
+                    },
+                ],
+            },
+            {
+                "component": "VRow",
+                "content": [
+                    {
+                        "component": "VCol",
+                        "props": {"cols": 12},
+                        "content": [
+                            {
+                                "component": "VAlert",
+                                "props": {
+                                    "type": "info",
+                                    "variant": "tonal",
+                                    "density": "compact",
+                                    "class": "mb-2",
+                                },
+                                "content": [
+                                    {
+                                        "component": "div",
+                                        "text": "规则：读取每个 STRM 内容中的 size 与 md5，相同视为同一文件；保留文件名最长的一条，其余重复文件删除。"
+                                    },
+                                ],
+                            },
+                            {
+                                "component": "VTextarea",
+                                "props": {
+                                    "model": "deduplicate_strm_paths",
+                                    "label": "STRM 目录路径（每行一个）",
+                                    "rows": 4,
+                                    "placeholder": "/volume1/strm/movies\n/volume1/strm/tv",
+                                    "hint": "填写本地 STRM 目录，每行一个；留空时默认扫描整理事件监控目录。",
+                                    "persistent-hint": True,
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }, ]
 
         return [
             {
@@ -1534,6 +1638,9 @@ class P123StrmSelfuse(_PluginBase):
             "clear_recyclebin_enabled": False,
             "clear_receive_path_enabled": False,
             "cron_clear": "0 */7 * * *",
+            "deduplicate_strm_enabled": False,
+            "deduplicate_strm_paths": "",
+            "deduplicate_strm_keep_longest": True,
             "tab": "tab-transfer",
         }
 
@@ -1575,6 +1682,9 @@ class P123StrmSelfuse(_PluginBase):
                 "clear_recyclebin_enabled": self._clear_recyclebin_enabled,
                 "clear_receive_path_enabled": self._clear_receive_path_enabled,
                 "cron_clear": self._cron_clear,
+                "deduplicate_strm_enabled": self._deduplicate_strm_enabled,
+                "deduplicate_strm_paths": self._deduplicate_strm_paths,
+                "deduplicate_strm_keep_longest": self._deduplicate_strm_keep_longest,
             }
         )
 
@@ -2114,6 +2224,75 @@ class P123StrmSelfuse(_PluginBase):
         except Exception as e:
             logger.error(f"【我的秒传清理】清理我的秒传运行失败: {e}")
             return
+
+    def strm_dedup_files(self):
+        """
+        手工 STRM 去重，读取 deduplicate_strm_paths，保留文件名最长一条。
+        """
+        from collections import defaultdict
+        RE_SIZE = re.compile(r'[?&](size|s|filesize|file_size)=(\d+)', re.I)
+        RE_MD5 = re.compile(r'[?&](md5|hash|file_md5|md5sum)=([A-Fa-f0-9]{32})', re.I)
+
+        raw = (self._deduplicate_strm_paths or '').strip()
+        roots = [Path(line.strip()) for line in raw.replace('，', '\n').splitlines() if line.strip()]
+        if not roots and self._transfer_monitor_paths:
+            for line in self._transfer_monitor_paths.split('\n'):
+                if not line.strip():
+                    continue
+                parts = line.split('#', 1)
+                if parts:
+                    roots.append(Path(parts[0]))
+        if not roots:
+            logger.warning('【STRM去重】未配置目录路径，请先在配置页填写 STRM 目录路径')
+            return
+        buckets: Dict[tuple, List[Path]] = defaultdict(list)
+        for root in roots:
+            if not root.exists() or not root.is_dir():
+                logger.warning(f"【STRM去重】目录不存在或不是目录，跳过: {root}")
+                continue
+            for base, _dirs, files in os.walk(root):
+                for name in files:
+                    if not name.lower().endswith('.strm'):
+                        continue
+                    full = Path(base) / name
+                    try:
+                        content = full.read_text(encoding='utf-8', errors='ignore').strip()
+                    except Exception as e:
+                        logger.warning(f"【STRM去重】读取失败: {full} => {e}")
+                        continue
+                    size = md5 = None
+                    m = RE_SIZE.search(content)
+                    if m:
+                        size = m.group(2)
+                    m = RE_MD5.search(content)
+                    if m:
+                        md5 = m.group(2).lower()
+                    if size or md5:
+                        buckets[(size, md5)].append(full)
+
+        dup_groups = {k: v for k, v in buckets.items() if len(v) > 1}
+        if not dup_groups:
+            logger.info('【STRM去重】未发现重复。')
+            return
+
+        total = 0
+        for key, files in dup_groups.items():
+            files_sorted = sorted(files, key=lambda p: len(p.name), reverse=True)
+            keeper = files_sorted[0]
+            logger.info(
+                f"【STRM去重】size={key[0]} md5={key[1]} => 保留 {keeper.name}，"
+                f"共 {len(files_sorted)-1} 条重复"
+            )
+            if self._deduplicate_strm_keep_longest:
+                for pth in files_sorted[1:]:
+                    try:
+                        pth.unlink()
+                        logger.info(f"【STRM去重】已删除: {pth}")
+                        total += 1
+                    except Exception as e:
+                        logger.error(f"【STRM去重】删除失败: {pth} => {e}")
+
+        logger.info(f"【STRM去重】完成，共删除 {total} 个重复 STRM 文件")
 
     def stop_service(self):
         """
