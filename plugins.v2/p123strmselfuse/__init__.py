@@ -2225,6 +2225,19 @@ class P123StrmSelfuse(_PluginBase):
             logger.error(f"【我的秒传清理】清理我的秒传运行失败: {e}")
             return
 
+    def stop_service(self):
+        """
+        退出插件
+        """
+        try:
+            if self._scheduler:
+                self._scheduler.remove_all_jobs()
+                if self._scheduler.running:
+                    self._scheduler.shutdown()
+                self._scheduler = None
+        except Exception as e:
+            print(str(e))
+
     def strm_dedup_files(self):
         """
         手工 STRM 去重，读取 deduplicate_strm_paths，保留文件名最长一条。
@@ -2234,7 +2247,12 @@ class P123StrmSelfuse(_PluginBase):
         RE_MD5 = re.compile(r'[?&](md5|hash|file_md5|md5sum)=([A-Fa-f0-9]{32})', re.I)
 
         raw = (self._deduplicate_strm_paths or '').strip()
-        roots = [Path(line.strip()) for line in raw.replace('，', '\n').splitlines() if line.strip()]
+        roots = []
+        for line in raw.replace('，', '\n').splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            roots.append(Path(line.split('#', 1)[0]))
         if not roots and self._transfer_monitor_paths:
             for line in self._transfer_monitor_paths.split('\n'):
                 if not line.strip():
@@ -2294,15 +2312,13 @@ class P123StrmSelfuse(_PluginBase):
 
         logger.info(f"【STRM去重】完成，共删除 {total} 个重复 STRM 文件")
 
-    def stop_service(self):
-        """
-        退出插件
-        """
-        try:
-            if self._scheduler:
-                self._scheduler.remove_all_jobs()
-                if self._scheduler.running:
-                    self._scheduler.shutdown()
-                self._scheduler = None
-        except Exception as e:
-            print(str(e))
+    def get_commands(self):
+        return {
+            "cmd": "/strm_dedup",
+            "title": "手工 STRM 去重",
+            "description": "读取配置的 STRM 目录，按 size+md5 去重，保留文件名最长的一条。",
+            "func": self.strm_dedup_files,
+        }
+
+    def get_page(self):
+        return None
