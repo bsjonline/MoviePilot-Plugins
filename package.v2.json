@@ -3,7 +3,7 @@
     "name": "123STRM",
     "description": "123云盘STRM生成一条龙服务",
     "labels": "云盘",
-    "version": "1.2.4",
+    "version": "1.2.7",
     "release": false,
     "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
     "author": "bsjonline",
@@ -36,7 +36,10 @@
       "v1.2.1": "修复 `Generator` 未导入导致加载失败",
       "v1.2.2": "【分享STRM生成】运行失败修复：删除上游遗留的 `is_dir` 字段检查，_share_recursive 只会产出文件节点",
       "v1.2.3": "【分享STRM生成】运行失败：上游遗留的 is_dir 检查在本分支失效；修复 _share_recursive 文件项补充 is_dir=False 以兼容 downstream 过滤逻辑",
-      "v1.2.4": "当前层目录 relpath 末尾补 /，确保 _share_recursive 逐层拼接的完整相对路径不会被粘到父目录名上"
+      "v1.2.4": "当前层目录 relpath 末尾补 /，确保 _share_recursive 逐层拼接的完整相对路径不会被粘到父目录名上",
+      "v1.2.5": "字幕低并发下载+重试",
+      "v1.2.6": "新增手工 STRM 去重 UI 和 backend",
+      "v1.2.7": "补全去重命令注册和样式修改，更新版本号同步"
     },
     "system_version": ">=2.13.0"
   }
