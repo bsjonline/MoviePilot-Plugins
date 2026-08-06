@@ -1,2 +1,2 @@
-p123client
+p123client==0.0.9.4
 httpx[http2]
