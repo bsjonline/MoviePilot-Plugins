@@ -563,7 +563,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.2.10"
+    plugin_version = "1.2.12"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -673,8 +673,13 @@ class P123StrmSelfuse(_PluginBase):
 
         try:
             self._client = P123AutoClient(self._passport, self._password)
+            uid_resp = self._client.user_info()
+            check_response(uid_resp)
+            self._uid = uid_resp.get("data", {}).get("userId") or uid_resp.get("data", {}).get("user_id") or ""
         except Exception as e:
-            logger.error(f"123云盘客户端创建失败: {e}")
+            logger.error(f"123云盘客户端创建或获取UID失败: {e}")
+            self._client = None
+            self._uid = ""
 
         # 停止现有任务
         self.stop_service()
@@ -1819,7 +1824,6 @@ class P123StrmSelfuse(_PluginBase):
 
         logger.info(f"【媒体刮削】{item_name} 刮削元数据完成")
 
-    @cached(cache=TTLCache(maxsize=1, ttl=2 * 60))
     def redirect_url(
         self,
         request: Request,
@@ -1827,40 +1831,46 @@ class P123StrmSelfuse(_PluginBase):
         size: int = 0,
         md5: str = "",
         s3_key_flag: str = "",
+        file_id: str = "",
     ):
         """
         123云盘302跳转
         """
-        if not s3_key_flag:
-            try:
-                resp = self._client.fs_mkdir("我的秒传")
-                check_response(resp)
-                resp = self._client.upload_file_fast(
-                    file_md5=md5,
-                    file_name=f"{md5}-{size}",
-                    file_size=size,
-                    parent_id=resp["data"]["Info"]["FileId"],
-                    duplicate=2,
-                )
-                check_response(resp)
-                payload = resp["data"]["Info"]
-                logger.info(
-                    f"【302跳转服务】转存 {name} 文件成功: {payload['S3KeyFlag']}"
-                )
-            except Exception as e:
-                logger.error(f"【302跳转服务】转存 {name} 文件失败: {e}")
-                return JSONResponse(
-                    {"state": False, "message": f"转存 {name} 文件失败: {e}"}, 500
-                )
-        else:
-            payload = {
-                "S3KeyFlag": s3_key_flag,
-                "FileName": name,
-                "Etag": md5,
-                "Size": size,
-            }
-
         try:
+            if file_id:
+                payload = {
+                    "FileId": int(file_id),
+                    "Etag": md5,
+                    "Size": int(size) if size else 0,
+                    "S3KeyFlag": f"{self._uid}-0" if self._uid else "",
+                }
+            else:
+                try:
+                    resp = self._client.fs_mkdir("我的秒传")
+                    check_response(resp)
+                    resp = self._client.upload_file_fast(
+                        file_md5=md5,
+                        file_name=name,
+                        file_size=int(size) if size else 0,
+                        parent_id=resp["data"]["Info"]["FileId"],
+                        duplicate=2,
+                    )
+                    check_response(resp)
+                    payload = {
+                        "FileId": resp["data"]["Info"]["FileId"],
+                        "Etag": md5,
+                        "Size": int(size) if size else 0,
+                        "S3KeyFlag": f"{self._uid}-0" if self._uid else "",
+                    }
+                    logger.info(
+                        f"【302跳转服务】秒传 {name} 文件成功: {payload['FileId']}"
+                    )
+                except Exception as e:
+                    logger.error(f"【302跳转服务】秒传 {name} 文件失败: {e}")
+                    return JSONResponse(
+                        {"state": False, "message": f"秒传 {name} 文件失败: {e}"}, 500
+                    )
+
             user_agent = request.headers.get("User-Agent") or b""
             logger.debug(f"【302跳转服务】获取到客户端UA: {user_agent}")
             resp = self._client.download_info(
