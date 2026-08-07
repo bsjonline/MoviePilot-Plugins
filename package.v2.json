@@ -3,13 +3,15 @@
     "name": "123STRM",
     "description": "123云盘STRM生成一条龙服务",
     "labels": "云盘",
-    "version": "1.2.10",
-    "release": false,
+    "version": "1.3.4",
+    "release": true,
     "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
     "author": "bsjonline",
     "level": 1,
     "history": {
       "v1.2.10": "锁定 p123client==0.0.9.4 依赖版本",
+      "v1.2.12": "download_info payload 必须带 Etag，否则 KeyError；file_id 和秒传分支均补充 Etag=md5",
+      "v1.2.13": "download_info payload 必须带 Size，否则返回 400；file_id 和秒传分支均补充 Size=int(size)",
       "v1.2.9": "更新依赖：p123client 改为可 pip install -U 安装",
       "v1.2.8": "修复地址变更",
       "v1.1.8": "回滚 share_iterdir(max_depth=-1) 翻页递归方案，恢复上游 get_share_list_creata_strm；保持 relpath 目录层级",
@@ -42,7 +44,16 @@
       "v1.0.3": "修复全量与分享生成STRM分页失败",
       "v1.0.2": "修复部分情况下全量和分享无法使用",
       "v1.0.1": "优化302跳转速度",
-      "v1.0.0": "发布，前置依赖123云盘储存插件"
+      "v1.0.0": "发布，前置依赖123云盘储存插件",
+      "v1.2.14": "download_info payload 必须带 S3KeyFlag；自动从 user_info 获取 UID 并拼接 UID-0",
+      "v1.2.15": "STRM 改为 /play/{file_id}/{etag}/{size}/{filename} 路径格式；新增 play 路由统一处理秒传+download_info+302",
+      "v1.2.16": "redirect_url 302 到 /play/{file_id}/{etag}/{size}/{filename}；play 路由内部调 download_info 再 302 到真实地址；STRM 格式完全不变",
+      "v1.2.17": "版本号上调，修复安装识别",
+      "v1.3.0": "版本号升级到 1.3.0；redirect_url 302 到 /play 路由，play 内部调 download_info 再 302；STRM 格式完全不变",
+      "v1.3.1": "修复 S3KeyFlag 拼接错误：user_info 返回的 userId 是数字，直接用 str(self._uid)-0 即可",
+      "v1.3.2": "增加调试日志：play/redirect_url 打印 payload、_uid、download_info 原始响应，方便定位 S3KeyFlag 问题",
+      "v1.3.3": "增强UID提取：多字段兼容 userId/user_id/UserID/userid/id；初始化/play 增加调试日志打印原始响应",
+      "v1.3.4": "修复UID提取：优先读取 data.UID（123 API 实际返回大写 UID），确保 S3KeyFlag 拼装正确"
     },
     "system_version": ">=2.13.0"
   }
