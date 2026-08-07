@@ -271,10 +271,9 @@ class FullSyncStrmHelper:
                         new_file_path.parent.mkdir(parents=True, exist_ok=True)
 
                         strm_url = (
-                            f"{self.server_address}/api/v1/plugin/P123StrmSelfuse/redirect_url"
-                            f"?apikey={settings.API_TOKEN}&name={item['FileName']}"
-                            f"&size={item['Size']}&md5={item['Etag']}"
-                            f"&s3_key_flag={item['S3KeyFlag']}"
+                            f"{self.server_address}/api/v1/plugin/P123StrmSelfuse/play"
+                            f"/{item['FileId']}/{item['Etag']}/{item['Size']}"
+                            f"/{item['FileName']}"
                         )
 
                         with open(new_file_path, "w", encoding="utf-8") as file:
@@ -471,10 +470,9 @@ class ShareStrmHelper:
                 new_file_path.parent.mkdir(parents=True, exist_ok=True)
 
                 strm_url = (
-                    f"{self.server_address}/api/v1/plugin/P123StrmSelfuse/redirect_url"
-                    f"?apikey={settings.API_TOKEN}&name={item['FileName']}"
-                    f"&size={item['Size']}&md5={item['Etag']}"
-                    f"&s3_key_flag={item['S3KeyFlag']}"
+                    f"{self.server_address}/api/v1/plugin/P123StrmSelfuse/play"
+                    f"/{item['FileId']}/{item['Etag']}/{item['Size']}"
+                    f"/{item['FileName']}"
                 )
 
                 with open(new_file_path, "w", encoding="utf-8") as file:
@@ -563,7 +561,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.2.10"
+    plugin_version = "1.2.12"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -673,8 +671,13 @@ class P123StrmSelfuse(_PluginBase):
 
         try:
             self._client = P123AutoClient(self._passport, self._password)
+            uid_resp = self._client.user_info()
+            check_response(uid_resp)
+            self._uid = uid_resp.get("data", {}).get("userId") or uid_resp.get("data", {}).get("user_id") or ""
         except Exception as e:
-            logger.error(f"123云盘客户端创建失败: {e}")
+            logger.error(f"123云盘客户端创建或获取UID失败: {e}")
+            self._client = None
+            self._uid = ""
 
         # 停止现有任务
         self.stop_service()
@@ -765,20 +768,16 @@ class P123StrmSelfuse(_PluginBase):
 
     def get_api(self) -> List[Dict[str, Any]]:
         """
-        BASE_URL: {server_url}/api/v1/plugin/P123StrmSelfuse/redirect_url?apikey={APIKEY}
-        0. 查询带 s3_key_flag
-            url: ${BASE_URL}&name={name}&size={size}&md5={md5}&s3_key_flag={s3_key_flag}
-        1. 查询不带 s3_key_flag
-           会尝试先秒传到你的网盘的 "/我的秒传" 目录下，名字为 f"{md5}-{size}" 的文件，然后再获取下载链接
-            url: ${BASE_URL}&name={name}&size={size}&md5={md5}
+        BASE_URL: {server_url}/api/v1/plugin/P123StrmSelfuse/play/{file_id}/{etag}/{size}/{filename}
+        会按 file_id 直接取下载地址；若失败则秒传到 "/我的秒传" 后取下载地址
         """
         return [
             {
-                "path": "/redirect_url",
-                "endpoint": self.redirect_url,
-                "methods": ["GET", "POST", "HEAD"],
-                "summary": "302跳转",
-                "description": "123云盘302跳转",
+                "path": "/play/{file_id}/{etag}/{size}/{filename}",
+                "endpoint": self.play,
+                "methods": ["GET", "HEAD"],
+                "summary": "播放跳转",
+                "description": "123云盘播放302跳转",
             }
         ]
 
@@ -1819,7 +1818,26 @@ class P123StrmSelfuse(_PluginBase):
 
         logger.info(f"【媒体刮削】{item_name} 刮削元数据完成")
 
-    @cached(cache=TTLCache(maxsize=1, ttl=2 * 60))
+    def play(
+        self,
+        request: Request,
+        file_id: str = "",
+        etag: str = "",
+        size: str = "",
+        filename: str = "",
+    ):
+        """
+        123云盘播放跳转
+        """
+        return self.redirect_url(
+            request=request,
+            name=filename,
+            size=int(size) if size else 0,
+            md5=etag,
+            s3_key_flag="",
+            file_id=file_id,
+        )
+
     def redirect_url(
         self,
         request: Request,
@@ -1827,40 +1845,46 @@ class P123StrmSelfuse(_PluginBase):
         size: int = 0,
         md5: str = "",
         s3_key_flag: str = "",
+        file_id: str = "",
     ):
         """
         123云盘302跳转
         """
-        if not s3_key_flag:
-            try:
-                resp = self._client.fs_mkdir("我的秒传")
-                check_response(resp)
-                resp = self._client.upload_file_fast(
-                    file_md5=md5,
-                    file_name=f"{md5}-{size}",
-                    file_size=size,
-                    parent_id=resp["data"]["Info"]["FileId"],
-                    duplicate=2,
-                )
-                check_response(resp)
-                payload = resp["data"]["Info"]
-                logger.info(
-                    f"【302跳转服务】转存 {name} 文件成功: {payload['S3KeyFlag']}"
-                )
-            except Exception as e:
-                logger.error(f"【302跳转服务】转存 {name} 文件失败: {e}")
-                return JSONResponse(
-                    {"state": False, "message": f"转存 {name} 文件失败: {e}"}, 500
-                )
-        else:
-            payload = {
-                "S3KeyFlag": s3_key_flag,
-                "FileName": name,
-                "Etag": md5,
-                "Size": size,
-            }
-
         try:
+            if file_id:
+                payload = {
+                    "FileId": int(file_id),
+                    "Etag": md5,
+                    "Size": int(size) if size else 0,
+                    "S3KeyFlag": f"{self._uid}-0" if self._uid else "",
+                }
+            else:
+                try:
+                    resp = self._client.fs_mkdir("我的秒传")
+                    check_response(resp)
+                    resp = self._client.upload_file_fast(
+                        file_md5=md5,
+                        file_name=name,
+                        file_size=int(size) if size else 0,
+                        parent_id=resp["data"]["Info"]["FileId"],
+                        duplicate=2,
+                    )
+                    check_response(resp)
+                    payload = {
+                        "FileId": resp["data"]["Info"]["FileId"],
+                        "Etag": md5,
+                        "Size": int(size) if size else 0,
+                        "S3KeyFlag": f"{self._uid}-0" if self._uid else "",
+                    }
+                    logger.info(
+                        f"【302跳转服务】秒传 {name} 文件成功: {payload['FileId']}"
+                    )
+                except Exception as e:
+                    logger.error(f"【302跳转服务】秒传 {name} 文件失败: {e}")
+                    return JSONResponse(
+                        {"state": False, "message": f"秒传 {name} 文件失败: {e}"}, 500
+                    )
+
             user_agent = request.headers.get("User-Agent") or b""
             logger.debug(f"【302跳转服务】获取到客户端UA: {user_agent}")
             resp = self._client.download_info(
