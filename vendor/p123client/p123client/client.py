@@ -57,14 +57,20 @@ from .exception import (
 # 可以使用的域名（http 和 https 都可以，并可以加后缀 /a 或 /b，但加了后缀不一定可用（可能会报 401 错误））
 # https://123pan.com
 # https://123pan.cn
-# https://www.123pan.com
+# https://api.123pan.cn
 # https://www.123pan.cn
+# https://login.123pan.cn
 # https://login.123pan.com
+# https://yun.123pan.cn
+# https://yun.123pan.com
+# https://api.123278.com
+# https://123684.com
 # https://www.123684.com
+# https://123865.com
 # https://www.123865.com
-# https://www.123912.com
 # https://123912.com
-DEFAULT_BASE_URL: Final = "https://www.123pan.com/b"
+# https://www.123912.com
+DEFAULT_BASE_URL: Final = "https://123pan.com/b"
 DEFAULT_LOGIN_BASE_URL: Final = "https://login.123pan.com"
 DEFAULT_OPEN_BASE_URL: Final = "https://open-api.123pan.com"
 # 默认的请求函数
@@ -110,7 +116,10 @@ def update_headers_in_kwargs(
     **kwargs, 
 ):
     if headers := request_kwargs.get("headers"):
-        headers = dict(headers)
+        if isinstance(headers, str):
+            headers = {"platform": headers}
+        else:
+            headers = dict(headers)
     else:
         headers = {}
     headers.update(*args, **kwargs)
@@ -1455,6 +1464,7 @@ class P123OpenClient:
         self, 
         payload: dict | int | str, 
         /, 
+        platform: str = "", 
         base_url: str | Callable[[], str] = DEFAULT_OPEN_BASE_URL, 
         *, 
         async_: Literal[False] = False, 
@@ -1466,6 +1476,7 @@ class P123OpenClient:
         self, 
         payload: dict | int | str, 
         /, 
+        platform: str = "", 
         base_url: str | Callable[[], str] = DEFAULT_OPEN_BASE_URL, 
         *, 
         async_: Literal[True], 
@@ -1476,6 +1487,7 @@ class P123OpenClient:
         self, 
         payload: dict | int | str, 
         /, 
+        platform: str = "", 
         base_url: str | Callable[[], str] = DEFAULT_OPEN_BASE_URL, 
         *, 
         async_: Literal[False, True] = False, 
@@ -1495,7 +1507,8 @@ class P123OpenClient:
             - fileId: int 💡 文件 id
         """
         api = complete_url("/api/v1/file/download_info", base_url)
-        update_headers_in_kwargs(request_kwargs, platform="android")
+        if platform:
+            update_headers_in_kwargs(request_kwargs, platform=platform)
         if not isinstance(payload, dict):
             payload = {"fileId": payload}
         return self.request(api, params=payload, async_=async_, **request_kwargs)
@@ -3843,9 +3856,9 @@ class P123OpenClient:
                 else:
                     url = file.geturl()
                 if async_:
-                    from httpfile import AsyncHttpxFileReader
+                    from httpfile import AsyncHTTPFileReader
                     async def request():
-                        file = await AsyncHttpxFileReader.new(url)
+                        file: AsyncHTTPFileReader = await AsyncHTTPFileReader.new(url)
                         async with file:
                             return await do_upload(file)
                     return request()
@@ -5770,9 +5783,9 @@ class P123OpenClient:
                 else:
                     url = file.geturl()
                 if async_:
-                    from httpfile import AsyncHttpxFileReader
+                    from httpfile import AsyncHTTPFileReader
                     async def request():
-                        file = await AsyncHttpxFileReader.new(url)
+                        file: AsyncHTTPFileReader = await AsyncHTTPFileReader.new(url)
                         async with file:
                             return await do_upload(file)
                     return request()
@@ -6568,7 +6581,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取配置信息
 
-        POST https://www.123pan.com/api/config/get
+        POST https://123pan.com/api/config/get
 
         :payload:
             - business_key: str 💡 配置键名（字段）
@@ -6614,7 +6627,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取 123 网盘的各种域名
 
-        GET https://www.123pan.com/api/dydomain
+        GET https://123pan.com/api/dydomain
         """
         request_kwargs.setdefault("parse", default_parse)
         if request is None:
@@ -6655,7 +6668,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取 app-id
 
-        GET https://www.123pan.com/api/v3/3rd/app-id
+        GET https://123pan.com/api/v3/3rd/app-id
         """
         request_kwargs.setdefault("parse", default_parse)
         if request is None:
@@ -6699,7 +6712,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """第三方挂载工具登录授权列表
 
-        DELETE https://www.123pan.com/api/restful/goapi/v1/oauth2/app_permission
+        DELETE https://123pan.com/api/restful/goapi/v1/oauth2/app_permission
 
         :payload:
             - appId: str 💡 应用 id，也就是 ``client_id``
@@ -6748,7 +6761,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """第三方挂载工具登录授权列表
 
-        GET https://www.123pan.com/api/restful/goapi/v1/oauth2/app_permission/list
+        GET https://123pan.com/api/restful/goapi/v1/oauth2/app_permission/list
 
         :payload:
             - page: int = 1 💡 第几页
@@ -6795,7 +6808,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取 123 网盘的服务器时间戳
 
-        GET https://www.123pan.com/api/get/server/time
+        GET https://123pan.com/api/get/server/time
         """
         request_kwargs.setdefault("parse", default_parse)
         if request is None:
@@ -6836,7 +6849,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取和传输有关的配置信息
 
-        GET https://www.123pan.com/api/transfer/metrics/whether/report
+        GET https://123pan.com/api/transfer/metrics/whether/report
         """
         request_kwargs.setdefault("parse", default_parse)
         if request is None:
@@ -6882,7 +6895,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """禁用直链空间
 
-        POST https://www.123pan.com/api/cdn-link/disable
+        POST https://123pan.com/api/cdn-link/disable
 
         :payload:
             - fileID: int | str 💡 目录 id
@@ -6931,7 +6944,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """启用直链空间
 
-        POST https://www.123pan.com/api/cdn-link/enable
+        POST https://123pan.com/api/cdn-link/enable
 
         :payload:
             - fileID: int | str 💡 目录 id
@@ -6980,7 +6993,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取直链链接
 
-        GET https://www.123pan.com/api/cdn-link/url
+        GET https://123pan.com/api/cdn-link/url
 
         :payload:
             - fileID: int | str 💡 文件 id
@@ -7002,6 +7015,7 @@ class P123Client(P123OpenClient):
         self, 
         payload: dict | int | str, 
         /, 
+        platform: str = "", 
         base_url: str | Callable[[], str] = DEFAULT_BASE_URL, 
         *, 
         async_: Literal[False] = False, 
@@ -7013,6 +7027,7 @@ class P123Client(P123OpenClient):
         self, 
         payload: dict | int | str, 
         /, 
+        platform: str = "", 
         base_url: str | Callable[[], str] = DEFAULT_BASE_URL, 
         *, 
         async_: Literal[True], 
@@ -7023,6 +7038,7 @@ class P123Client(P123OpenClient):
         self, 
         payload: dict | int | str, 
         /, 
+        platform: str = "", 
         base_url: str | Callable[[], str] = DEFAULT_BASE_URL, 
         *, 
         async_: Literal[False, True] = False, 
@@ -7030,7 +7046,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取下载信息
 
-        POST https://www.123pan.com/api/file/download_info
+        POST https://123pan.com/api/file/download_info
 
         .. hint::
             即使文件已经被删除，只要还有 S3KeyFlag 和 Etag （即 MD5） 就依然可以下载
@@ -7062,7 +7078,8 @@ class P123Client(P123OpenClient):
         """
         def gen_step():
             nonlocal payload
-            update_headers_in_kwargs(request_kwargs, platform="android")
+            if platform:
+                update_headers_in_kwargs(request_kwargs, platform=platform)
             if not isinstance(payload, dict):
                 resp = yield self.fs_info(
                     payload, 
@@ -7083,6 +7100,104 @@ class P123Client(P123OpenClient):
                 payload["filename"] = payload["etag"]
             return self.request(
                 "file/download_info", 
+                "POST", 
+                json=payload, 
+                base_url=base_url, 
+                async_=async_, 
+                **request_kwargs, 
+            )
+        return run_gen_step(gen_step, async_)
+
+    @overload
+    def download_info_v2(
+        self, 
+        payload: dict | int | str, 
+        /, 
+        platform: str = "", 
+        base_url: str | Callable[[], str] = DEFAULT_BASE_URL, 
+        *, 
+        async_: Literal[False] = False, 
+        **request_kwargs, 
+    ) -> dict:
+        ...
+    @overload
+    def download_info_v2(
+        self, 
+        payload: dict | int | str, 
+        /, 
+        platform: str = "", 
+        base_url: str | Callable[[], str] = DEFAULT_BASE_URL, 
+        *, 
+        async_: Literal[True], 
+        **request_kwargs, 
+    ) -> Coroutine[Any, Any, dict]:
+        ...
+    def download_info_v2(
+        self, 
+        payload: dict | int | str, 
+        /, 
+        platform: str = "", 
+        base_url: str | Callable[[], str] = DEFAULT_BASE_URL, 
+        *, 
+        async_: Literal[False, True] = False, 
+        **request_kwargs, 
+    ) -> dict | Coroutine[Any, Any, dict]:
+        """获取下载信息
+
+        POST https://123pan.com/api/v2/file/download_info
+
+        .. hint::
+            即使文件已经被删除，只要还有 S3KeyFlag 和 Etag （即 MD5） 就依然可以下载
+
+            你完全可以构造这样的查询参数
+
+            .. code:: python
+
+                payload = {
+                    "Etag": "...", # 必填，文件的 MD5
+                    "FileID": 0, # 可以随便填
+                    "FileName": "a", # 随便填一个名字
+                    "S3KeyFlag": str # 必填，格式为 f"{UID}-0"，UID 就是上传此文件的用户的 UID，如果此文件是由你上传的，则可从 ``P123Client.user_info`` 的响应中获取
+                    "Size": 0, # 可以随便填，填了可能搜索更准确
+                }
+
+        .. note::
+            获取的直链有效期是 24 小时
+
+        :payload:
+            - etag: str 💡 文件的 MD5 散列值
+            - s3keyFlag: str
+            - fileName: str = <default> 💡 默认用 Etag（即 MD5）作为文件名
+            - fileId: int | str = 0
+            - size: int = <default>
+            - type: int = 0
+            - driveId: int | str = 0
+            - ...
+        """
+        def gen_step():
+            nonlocal payload
+            if platform:
+                update_headers_in_kwargs(request_kwargs, platform=platform)
+            if not isinstance(payload, dict):
+                resp = yield self.fs_info(
+                    payload, 
+                    base_url=base_url, 
+                    async_=async_, 
+                    **request_kwargs, 
+                )
+                resp["payload"] = payload
+                check_response(resp)
+                if not (info_list := resp["data"]["infoList"]):
+                    raise FileNotFoundError(errno.ENOENT, resp)
+                payload = cast(dict, info_list[0])
+                if payload["Type"]:
+                    raise IsADirectoryError(errno.EISDIR, resp)
+            payload = dict_key_to_lower_merge(
+                payload, {"driveId": 0, "Type": 0, "FileID": 0})
+            if "filename" not in payload:
+                payload["filename"] = payload["etag"]
+            return self.request(
+                "v2/file/download_info", 
                 "POST", 
                 json=payload, 
                 base_url=base_url, 
@@ -7124,7 +7239,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取批量下载信息
 
-        POST https://www.123pan.com/api/file/batch_download_info
+        POST https://123pan.com/api/file/batch_download_info
 
         .. attention::
             会把一些文件或目录以 zip 包的形式下载，但非会员有流量限制，所以还是推荐用 ``P123Client.download_info`` 逐个获取下载链接并下载
@@ -7308,7 +7423,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取异常文件数
 
-        GET https://www.123pan.com/b/api/file/abnormal/count
+        GET https://123pan.com/b/api/file/abnormal/count
         """
         return self.request(
             "file/abnormal/count", 
@@ -7350,7 +7465,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """推送【云解压】任务
 
-        GET https://www.123pan.com/api/restful/goapi/v1/archive/file/list
+        GET https://123pan.com/api/restful/goapi/v1/archive/file/list
 
         .. note::
             后台异步执行，任务结果请从 ``client.fs_archive_status()`` 接口获取
@@ -7402,7 +7517,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """推送云解压任务
 
-        GET https://www.123pan.com/api/restful/goapi/v1/archive/file/status
+        GET https://123pan.com/api/restful/goapi/v1/archive/file/status
 
         .. note::
             响应结果中包含 "state" 字段，具体含义为
@@ -7458,7 +7573,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """推送【解压到】任务
 
-        POST https://www.123pan.com/api/restful/goapi/v1/archive/file/uncompress
+        POST https://123pan.com/api/restful/goapi/v1/archive/file/uncompress
 
         :payload:
             - fileId: int | str           💡 压缩包的文件 id
@@ -7527,7 +7642,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """复制
 
-        POST https://www.123pan.com/api/restful/goapi/v1/file/copy/async
+        POST https://123pan.com/api/restful/goapi/v1/file/copy/async
 
         :payload:
             - fileList: list[File] 💡 信息可以取自 ``P123Client.fs_info`` 接口
@@ -7600,7 +7715,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """复制：任务进度
 
-        GET https://www.123pan.com/api/restful/goapi/v1/file/copy/task
+        GET https://123pan.com/api/restful/goapi/v1/file/copy/task
 
         :payload:
             - taskId: int 💡 任务 id
@@ -7651,7 +7766,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取文件或目录详情（文件数、目录数、总大小）
 
-        GET https://www.123pan.com/api/file/detail
+        GET https://123pan.com/api/file/detail
 
         :payload:
             - fileID: int | str
@@ -7699,7 +7814,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取文件或目录详情（文件数、目录数、总大小等）
 
-        POST https://www.123pan.com/api/restful/goapi/v1/file/details
+        POST https://123pan.com/api/restful/goapi/v1/file/details
 
         :payload:
             - file_ids: list[int] 💡 文件或目录的 id 列表
@@ -7752,7 +7867,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """彻底删除
 
-        POST https://www.123pan.com/api/file/delete
+        POST https://123pan.com/api/file/delete
 
         .. hint::
             彻底删除文件前,文件必须要在回收站中,否则无法删除
@@ -7816,7 +7931,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """导出目录树
 
-        POST https://www.123pan.com/api/restful/goapi/v1/file/export-tree
+        POST https://123pan.com/api/restful/goapi/v1/file/export-tree
 
         .. caution::
             单次最多支持导出 100 万条目录数据
@@ -7886,7 +8001,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取某个 id 对应的祖先节点列表
 
-        POST https://www.123pan.com/api/file/get_path
+        POST https://123pan.com/api/file/get_path
 
         .. note::
             随后你可以把这组祖先节点 id 传给 ``client.fs_info()`` 接口，即可获得具体的节点信息
@@ -7938,7 +8053,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """分别获取一组 id 对应的祖先节点信息（此接口是 ``client.fs_get_path()`` 的加强版）
 
-        POST https://www.123pan.com/api/file/get_path_history
+        POST https://123pan.com/api/file/get_path_history
 
         :payload:
             - fileIdList: list[int]
@@ -7991,7 +8106,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取文件信息
 
-        POST https://www.123pan.com/api/file/info
+        POST https://123pan.com/api/file/info
 
         :payload:
             - fileIdList: list[FileID]
@@ -8051,7 +8166,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取文件列表（可搜索）
 
-        GET https://www.123pan.com/api/file/list
+        GET https://123pan.com/api/file/list
 
         .. note::
             如果返回信息中，"Next" 字段的值为 "-1"，代表最后一页（无需再翻页查询）
@@ -8136,7 +8251,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """按类型获取文件列表
 
-        GET https://www.123pan.com/api/restful/goapi/v1/file/category/list-by-type
+        GET https://123pan.com/api/restful/goapi/v1/file/category/list-by-type
 
         .. note::
             如果返回信息中，"Next" 字段的值为 "-1"，代表最后一页（无需再翻页查询）
@@ -8252,7 +8367,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取文件列表（可搜索）
 
-        GET https://www.123pan.com/api/file/list/new
+        GET https://123pan.com/api/file/list/new
 
         .. note::
             如果返回信息中，"Next" 字段的值为 "-1"，代表最后一页（无需再翻页查询）
@@ -8414,7 +8529,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """移动
 
-        POST https://www.123pan.com/api/file/mod_pid
+        POST https://123pan.com/api/file/mod_pid
 
         :payload:
             - fileIdList: list[FileID]
@@ -8475,7 +8590,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """刷新列表和直链缓存
 
-        POST https://www.123pan.com/api/restful/goapi/v1/cdnLink/cache/refresh
+        POST https://123pan.com/api/restful/goapi/v1/cdnLink/cache/refresh
         """
         return self.request(
             "restful/goapi/v1/cdnLink/cache/refresh", 
@@ -8519,7 +8634,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """（单个）改名
 
-        POST https://www.123pan.com/api/file/rename
+        POST https://123pan.com/api/file/rename
 
         :payload:
             - FileId: int | str
@@ -8572,7 +8687,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """锁定保险箱
 
-        POST https://www.123pan.com/api/restful/goapi/v1/file/safe_box/auth/lock
+        POST https://123pan.com/api/restful/goapi/v1/file/safe_box/auth/lock
         """
         return self.request(
             "restful/goapi/v1/file/safe_box/auth/lock", 
@@ -8618,7 +8733,7 @@ class P123Client(P123OpenClient):
         .. note::
             保险箱的 id，可以用 ``client.user_info()`` 接口获得，字段为 "SafeBoxFileId"
 
-        POST https://www.123pan.com/api/restful/goapi/v1/file/safe_box/auth/unlockbox
+        POST https://123pan.com/api/restful/goapi/v1/file/safe_box/auth/unlockbox
 
         :payload:
             - password: int | str 💡 6 位密码
@@ -8670,7 +8785,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """给文件或目录，设置或取消星标（收藏）
 
-        POST https://www.123pan.com/api/restful/goapi/v1/file/starred
+        POST https://123pan.com/api/restful/goapi/v1/file/starred
 
         :payload:
             - fileIdList: list[int | str] 💡 id 列表
@@ -8729,7 +8844,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """罗列已星标的文件或目录
 
-        GET https://www.123pan.com/api/restful/goapi/v1/file/starred/list
+        GET https://123pan.com/api/restful/goapi/v1/file/starred/list
 
         :payload:
             - driveId: int | str = 0
@@ -8827,7 +8942,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取同步空间的操作记录
 
-        GET https://www.123pan.com/api/restful/goapi/v1/sync-disk/file/log
+        GET https://123pan.com/api/restful/goapi/v1/sync-disk/file/log
 
         :payload:
             - page: int = 1               💡 第几页
@@ -8880,7 +8995,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """操作回收站
 
-        POST https://www.123pan.com/api/file/trash
+        POST https://123pan.com/api/file/trash
 
         :payload:
             - fileTrashInfoList: list[File] 💡 信息可以取自 ``P123Client.fs_info`` 接口，也可以仅文件 id
@@ -8952,7 +9067,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """清空回收站
 
-        POST https://www.123pan.com/api/file/trash_delete_all
+        POST https://123pan.com/api/file/trash_delete_all
 
         :payload:
             - event: str = "recycleClear"
@@ -9003,7 +9118,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """回收站：还原到指定位置
 
-        POST https://www.123pan.com/api/file/recover/by_path
+        POST https://123pan.com/api/file/recover/by_path
 
         :payload:
             - fileIds: list[int] 💡 文件或目录的 id 列表
@@ -9055,7 +9170,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取视频播放列表的配置信息
 
-        GET https://www.123pan.com/api/video/play/conf
+        GET https://123pan.com/api/video/play/conf
         """
         request_kwargs.setdefault("parse", default_parse)
         if request is None:
@@ -9099,7 +9214,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取某个目录下的视频列表
 
-        GET https://www.123pan.com/api/file/video/play/list
+        GET https://123pan.com/api/file/video/play/list
 
         :payload:
             - page: int = 1
@@ -9151,7 +9266,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """WebDAV 添加应用
 
-        POST https://www.123pan.com/api/restful/goapi/v1/webdav/account/create
+        POST https://123pan.com/api/restful/goapi/v1/webdav/account/create
 
         .. caution::
             密码不能自己设置，只会自动生成
@@ -9203,7 +9318,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """WebDAV 删除应用（解除授权）
 
-        GET https://www.123pan.com/api/restful/goapi/v1/webdav/account/del
+        GET https://123pan.com/api/restful/goapi/v1/webdav/account/del
 
         :payload:
             - id: int | str 💡 应用 id
@@ -9248,7 +9363,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """WebDAV 授权列表
 
-        GET https://www.123pan.com/api/restful/goapi/v1/webdav/account/list
+        GET https://123pan.com/api/restful/goapi/v1/webdav/account/list
         """
         return self.request(
             "restful/goapi/v1/webdav/account/list", 
@@ -9295,7 +9410,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """使用账号和密码登录
 
-        POST https://www.123pan.com/api/user/sign_in
+        POST https://123pan.com/api/user/sign_in
 
         .. note::
             获取的 token 有效期 30 天
@@ -9657,7 +9772,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """退出登录
 
-        POST https://www.123pan.com/api/user/logout
+        POST https://123pan.com/api/user/logout
         """
         return self.request(
             "user/logout", 
@@ -9702,7 +9817,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """取消离线下载任务
 
-        POST https://www.123pan.com/api/offline_download/task/abort
+        POST https://123pan.com/api/offline_download/task/abort
 
         :payload:
             - task_ids: list[int]   💡 任务 id 列表
@@ -9760,7 +9875,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """删除离线下载任务
 
-        POST https://www.123pan.com/api/offline_download/task/delete
+        POST https://123pan.com/api/offline_download/task/delete
 
         :payload:
             - task_ids: list[int] 💡 任务 id 列表
@@ -9814,7 +9929,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """离线下载任务列表
 
-        POST https://www.123pan.com/api/offline_download/task/list
+        POST https://123pan.com/api/offline_download/task/list
 
         :payload:
             - current_page: int = 1
@@ -9868,7 +9983,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """解析下载链接
 
-        POST https://www.123pan.com/api/v2/offline_download/task/resolve
+        POST https://123pan.com/api/v2/offline_download/task/resolve
 
         :payload:
             - urls: str = <default> 💡 下载链接，多个用 "\\n" 隔开（用于新建链接下载任务）
@@ -9917,7 +10032,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """离线下载速度等信息
 
-        POST https://www.123pan.com/api/offline_download/task/status
+        POST https://123pan.com/api/offline_download/task/status
         """
         return self.request(
             "offline_download/task/status", 
@@ -9963,7 +10078,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """提交离线下载任务
 
-        POST https://www.123pan.com/api/v2/offline_download/task/submit
+        POST https://123pan.com/api/v2/offline_download/task/submit
 
         .. note::
             提交信息来自 ``client.offline_task_resolve()`` 接口的响应，假设响应为 ``resp``，那么
@@ -10041,7 +10156,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """上传种子，以作解析
 
-        POST https://www.123pan.com/api/offline_download/upload/seed
+        POST https://123pan.com/api/offline_download/upload/seed
         """
         return self.request(
             "offline_download/upload/seed", 
@@ -10088,7 +10203,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """添加离线下载任务
 
-        POST https://www.123pan.com/api/offline_download/upload/seed
+        POST https://123pan.com/api/offline_download/upload/seed
 
         :param url: info_hash（只允许单个）、下载链接（多个用 "\n" 分隔）或者多个下载链接的迭代器
         :param upload_dir: 保存到目录的 id
@@ -10157,7 +10272,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """取消分享
 
-        POST https://www.123pan.com/api/share/delete
+        POST https://123pan.com/api/share/delete
 
         :payload:
             - shareInfoList: list[ShareID] 💡 信息可以取自 ``P123Client.fs_info`` 接口
@@ -10223,7 +10338,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """清理全部失效链接
 
-        GET https://www.123pan.com/api/share/clean_expire
+        GET https://123pan.com/api/share/clean_expire
 
         :payload:
             - event: str = "shareClear"
@@ -10272,7 +10387,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """分佣设置
 
-        POST https://www.123pan.com/api/share/update
+        POST https://123pan.com/api/share/update
 
         :payload:
             - shareIds: int | str 💡 分享 id，多个用 "," 隔开
@@ -10326,7 +10441,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """创建分享
 
-        POST https://www.123pan.com/api/share/create
+        POST https://123pan.com/api/share/create
 
         :payload:
             - fileIdList: int | str 💡 文件或目录的 id，多个用逗号 "," 分隔
@@ -10419,7 +10534,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取分享中的下载信息
 
-        POST https://www.123pan.com/api/share/download/info
+        POST https://123pan.com/api/share/download/info
 
         .. note::
             可以作为 staticmethod 使用，此时第 1 个位置参数要传入 None 或者 dict
@@ -10441,7 +10556,7 @@ class P123Client(P123OpenClient):
             payload = self
             self = None
         assert payload is not None
-        update_headers_in_kwargs(request_kwargs, platform="android")
+        #update_headers_in_kwargs(request_kwargs, platform="android")
         api = complete_url("share/download/info", base_url)
         if self is None:
             request_kwargs.setdefault("parse", default_parse)
@@ -10492,7 +10607,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取分享中的批量下载信息
 
-        POST https://www.123pan.com/api/file/batch_download_share_info
+        POST https://123pan.com/api/file/batch_download_share_info
 
         .. note::
             可以作为 staticmethod 使用，此时第 1 个位置参数要传入 None 或者 dict
@@ -10565,7 +10680,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """转存
 
-        POST https://www.123pan.com/api/file/copy/async
+        POST https://123pan.com/api/file/copy/async
 
         .. caution::
             这个函数的字段名，使用 snake case，而不是 camel case
@@ -10667,7 +10782,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取分享中的文件列表
 
-        GET https://www.123pan.com/api/share/get
+        GET https://123pan.com/api/share/get
 
         .. note::
             如果返回信息中，"Next" 字段的值为 "-1"，代表最后一页（无需再翻页查询）
@@ -10760,7 +10875,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取免费分享列表（可搜索）
 
-        GET https://www.123pan.com/api/share/list
+        GET https://123pan.com/api/share/list
 
         .. note::
             如果返回信息中，"Next" 字段的值为 "-1"，代表最后一页（无需再翻页查询）
@@ -10830,7 +10945,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """获取付费分享列表（可搜索）
 
-        GET https://www.123pan.com/api/restful/goapi/v1/share/content/payment/list
+        GET https://123pan.com/api/restful/goapi/v1/share/content/payment/list
 
         .. note::
             如果返回信息中，"Next" 字段的值为 "-1"，代表最后一页（无需再翻页查询）
@@ -10900,7 +11015,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """开启或关闭打赏
 
-        POST https://www.123pan.com/api/restful/goapi/v1/share/reward/status
+        POST https://123pan.com/api/restful/goapi/v1/share/reward/status
 
         :payload:
             - ids: list[int | str] 💡 分享 id
@@ -10950,7 +11065,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """分享提取流量包的信息
 
-        GET https://www.123pan.com/api/share/traffic-info
+        GET https://123pan.com/api/share/traffic-info
         """
         return self.request(
             "share/traffic-info", 
@@ -10992,7 +11107,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """流量包设置
 
-        PUT https://www.123pan.com/api/restful/goapi/v1/share/info
+        PUT https://123pan.com/api/restful/goapi/v1/share/info
 
         :payload:
             - shareId: int | str
@@ -11047,7 +11162,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """编辑分享
 
-        PUT https://www.123pan.com/api/restful/goapi/v1/share/update
+        PUT https://123pan.com/api/restful/goapi/v1/share/update
 
         :payload:
             - shareId: int 💡 分享 id
@@ -11106,7 +11221,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """认证上传信息，获取上传链接
 
-        POST https://www.123pan.com/api/file/s3_upload_object/auth
+        POST https://123pan.com/api/file/s3_upload_object/auth
 
         .. note::
             只能获取 1 个上传链接，用于非分块上传
@@ -11162,7 +11277,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """完成上传
 
-        POST https://www.123pan.com/api/file/upload_complete/v2
+        POST https://123pan.com/api/file/upload_complete/v2
 
         :payload:
             - FileId: int 💡 文件 id
@@ -11215,7 +11330,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """认证上传信息，获取上传链接
 
-        POST https://www.123pan.com/api/file/s3_repare_upload_parts_batch
+        POST https://123pan.com/api/file/s3_repare_upload_parts_batch
 
         .. note::
             一次可获取 `partNumberEnd - partNumberStart` 个上传链接，用于分块上传
@@ -11274,7 +11389,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """罗列已经上传的分块
 
-        POST https://www.123pan.com/api/file/s3_list_upload_parts
+        POST https://123pan.com/api/file/s3_list_upload_parts
 
         :payload:
             - bucket: str
@@ -11324,7 +11439,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """请求上传，获取一些初始化信息
 
-        POST https://www.123pan.com/api/file/upload_request
+        POST https://123pan.com/api/file/upload_request
 
         .. note::
             当响应信息里面有 "Reuse" 的值为 "true"，说明已经存在目录或者文件秒传
@@ -11515,9 +11630,9 @@ class P123Client(P123OpenClient):
                 else:
                     url = file.geturl()
                 if async_:
-                    from httpfile import AsyncHttpxFileReader
+                    from httpfile import AsyncHTTPFileReader
                     async def request():
-                        file = await AsyncHttpxFileReader.new(url)
+                        file: AsyncHTTPFileReader = await AsyncHTTPFileReader.new(url)
                         async with file:
                             return await do_upload(file)
                     return request()
@@ -11739,9 +11854,9 @@ class P123Client(P123OpenClient):
                     else:
                         url = file.geturl()
                     if async_:
-                        from httpfile import AsyncHttpxFileReader
+                        from httpfile import AsyncHTTPFileReader
                         async def request():
-                            file = await AsyncHttpxFileReader.new(url)
+                            file: AsyncHTTPFileReader = await AsyncHTTPFileReader.new(url)
                             async with file:
                                 return await do_upload(file)
                         return request()
@@ -11817,7 +11932,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """用户设备列表
 
-        GET https://www.123pan.com/api/user/device_list
+        GET https://123pan.com/api/user/device_list
 
         :payload:
             - event: str = "deviceManagement" 💡 事件类型，"deviceManagement" 为管理登录设备列表
@@ -11863,7 +11978,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """用户信息
 
-        GET https://www.123pan.com/api/user/info
+        GET https://123pan.com/api/user/info
         """
         return self.request(
             "user/info", 
@@ -11905,7 +12020,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """修改用户信息，默认行为是 修改用户昵称
 
-        POST https://www.123pan.com/api/user/modify_info
+        POST https://123pan.com/api/user/modify_info
 
         :payload:
             - event: str 💡 事件类型
@@ -11954,7 +12069,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """用户拉新返佣信息
 
-        GET https://www.123pan.com/api/referral/my-info
+        GET https://123pan.com/api/referral/my-info
         """
         return self.request(
             "referral/my-info", 
@@ -11993,7 +12108,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """用户推送消息配置
 
-        GET https://www.123pan.com/b/api/restful/goapi/v1/user/report/info
+        GET https://123pan.com/b/api/restful/goapi/v1/user/report/info
         """
         return self.request(
             "restful/goapi/v1/user/report/info", 
@@ -12035,7 +12150,7 @@ class P123Client(P123OpenClient):
     ) -> dict | Coroutine[Any, Any, dict]:
         """用户使用记录
 
-        GET https://www.123pan.com/api/user/use_history
+        GET https://123pan.com/api/user/use_history
 
         :payload:
             - event: str = "loginRecord" 💡 事件类型，"loginRecord" 为登录记录
