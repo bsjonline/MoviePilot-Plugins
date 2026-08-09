@@ -1,0 +1,42 @@
+{
+  "GYAPStrmSelfuse": {
+    "name": "gyapstrmselfuse",
+    "title": "光鸭云盘 STRM 助手",
+    "description": "基于 MD5 秒传播放，尽量不用转存",
+    "author": "bsjonline",
+    "homepage": "https://github.com/bsjonline/MoviePilot-Plugins",
+    "repo": "bsjonline/MoviePilot-Plugins",
+    "branch": "main",
+    "path": "plugins.v2/gyapstrmselfuse",
+    "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
+    "version": "0.1.0",
+    "system_version": ">=2.13.0",
+    "config": {
+      "gyap_access_token": {
+        "desc": "光鸭云盘 Access Token",
+        "type": "string",
+        "value": ""
+      },
+      "gyap_md5_dir": {
+        "desc": "MD5 秒传目录（留空使用默认目录）",
+        "type": "string",
+        "value": ""
+      },
+      "gyap_clear_receive_path": {
+        "desc": "清空秒传目录（危险操作）",
+        "type": "string",
+        "value": "no",
+        "options": ["yes", "no"]
+      },
+      "gyap_enabled": {
+        "desc": "启用插件",
+        "type": "string",
+        "value": "yes",
+        "options": ["yes", "no"]
+      }
+    },
+    "history": {
+      "v0.1.0": "初始版本，基于 MD5 秒传 + download_url 播放"
+    }
+  }
+}

@@ -1,0 +1,2 @@
+guangyaclient>=0.0.2
+httpx[http2]
