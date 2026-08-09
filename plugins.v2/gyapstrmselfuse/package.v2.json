@@ -2,41 +2,22 @@
   "GYAPStrmSelfuse": {
     "name": "gyapstrmselfuse",
     "title": "光鸭云盘 STRM 助手",
-    "description": "基于 MD5 秒传播放，尽量不用转存",
+    "description": "基于 GCID 秒传播放，尽量不用转存",
     "author": "bsjonline",
     "homepage": "https://github.com/bsjonline/MoviePilot-Plugins",
-    "repo": "bsjonline/MoviePilot-Plugins",
-    "branch": "main",
-    "path": "plugins.v2/gyapstrmselfuse",
+    "repository": "https://github.com/bsjonline/MoviePilot-Plugins",
     "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
-    "version": "0.1.0",
+    "label": "光鸭云盘",
+    "vender": "MoviePilot-Plugins-Custom",
     "system_version": ">=2.13.0",
-    "config": {
-      "gyap_access_token": {
-        "desc": "光鸭云盘 Access Token",
-        "type": "string",
-        "value": ""
-      },
-      "gyap_md5_dir": {
-        "desc": "MD5 秒传目录（留空使用默认目录）",
-        "type": "string",
-        "value": ""
-      },
-      "gyap_clear_receive_path": {
-        "desc": "清空秒传目录（危险操作）",
-        "type": "string",
-        "value": "no",
-        "options": ["yes", "no"]
-      },
-      "gyap_enabled": {
-        "desc": "启用插件",
-        "type": "string",
-        "value": "yes",
-        "options": ["yes", "no"]
+    "description_en": "Guangya Cloud Drive STRM helper, play via rapid import by gcid",
+    "description_zh": "基于 GCID 秒传播放，尽量不用转存。STRM 中只保留 gcid，播放时通过 rapid import 秒传获取 file_id 再 302 播放。",
+    "changelog": [
+      {
+        "version": "0.1.0",
+        "date": "2026-08-09",
+        "content": "初始版本：基于 GCID 秒传播放，不依赖 file_id 持久化"
       }
-    },
-    "history": {
-      "v0.1.0": "初始版本，基于 MD5 秒传 + download_url 播放"
-    }
+    ]
   }
 }

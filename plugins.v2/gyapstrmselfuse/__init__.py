@@ -1,8 +1,8 @@
 """
 光鸭云盘 STRM 助手
 
-基于 MD5 秒传获取 file_id，再获取下载地址 302 播放。
-不依赖 file_id 持久化，STRM 中只保留 md5。
+基于 GCID 秒传获取 file_id，再获取下载地址 302 播放。
+不依赖 file_id 持久化，STRM 中只保留 gcid。
 """
 
 import os
@@ -14,16 +14,12 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.plugins import _PluginBase
 from app.utils.string import StringUtils
-from app.helper.dict import DictHelper
-from app.schemas import MediaInfo
-from app.helper.mdc import MDC
-from app.helper.media import MediaHelper
 from app.log import logger
+from app.helper.mdc import MDC
+
 from tool.tool import GuangyaAutoClient
 
 from app.core.config import settings
-from app.helper.web import WebHelper
-from app.helper.site import SiteHelper
 
 
 class GYAPStrmSelfuse(_PluginBase):
@@ -34,7 +30,7 @@ class GYAPStrmSelfuse(_PluginBase):
     # 插件名称
     plugin_name = "gyapstrmselfuse"
     # 插件描述
-    plugin_desc = "光鸭云盘 STRM 助手，基于 MD5 秒传播放，尽量不用转存"
+    plugin_desc = "光鸭云盘 STRM 助手，基于 GCID 秒传播放，尽量不用转存"
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
@@ -51,7 +47,7 @@ class GYAPStrmSelfuse(_PluginBase):
             "value": "",
         },
         "gyap_md5_dir": {
-            "desc": "MD5 秒传目录（留空使用默认目录）",
+            "desc": "GCID 秒传目录（留空使用默认目录）",
             "type": "string",
             "value": "",
         },
@@ -113,7 +109,7 @@ class GYAPStrmSelfuse(_PluginBase):
         """
         返回插件 API 路由
 
-        BASE_URL: {server_url}/api/v1/plugin/GYAPStrmSelfuse/redirect_url?apikey={APIKEY}&name={name}&size={size}&md5={md5}
+        BASE_URL: {server_url}/api/v1/plugin/GYAPStrmSelfuse/redirect_url?apikey={APIKEY}&name={name}&size={size}&gcid={gcid}
         """
         return [
             {
@@ -124,7 +120,7 @@ class GYAPStrmSelfuse(_PluginBase):
                 "description": "光鸭云盘302跳转到下载地址",
             },
             {
-                "path": "/play/{md5}/{name}",
+                "path": "/play/{gcid}/{name}",
                 "endpoint": self.play,
                 "methods": ["GET", "HEAD"],
                 "summary": "播放跳转",
@@ -137,60 +133,84 @@ class GYAPStrmSelfuse(_PluginBase):
         request: Request,
         name: str = "",
         size: int = 0,
-        md5: str = "",
+        gcid: str = "",
     ):
         """
         光鸭云盘302跳转
 
-        流程：upload_token(md5) -> upload_info(task_id) -> download_url(file_id) -> 302
+        流程：rapid_get_token(gcid) -> rapid_check_flash(gcid) -> rapid_upload_info -> download_url(file_id) -> 302
         """
         if not self._client:
             return JSONResponse({"state": False, "message": "光鸭云盘客户端未初始化"}, 500)
 
+        if not gcid:
+            return JSONResponse({"state": False, "message": "缺少 gcid 参数"}, 400)
+
         try:
+            task_id = None
             file_id = None
             download_url = None
+            size = int(size) if size else 0
 
-            if md5:
-                # 通过 MD5 秒传获取 file_id
-                logger.info(f"【302跳转服务】尝试通过 MD5 秒传: {md5}")
-                try:
-                    token_resp = self._client.upload_token(
-                        name=name,
-                        file_size=int(size) if size else 0,
-                        parent_id="",
-                        md5=md5,
-                    )
-                    task_id = token_resp.get("data", {}).get("taskId")
-                    if task_id:
-                        info_resp = self._client.upload_info(task_id=task_id)
-                        file_info = info_resp.get("data") or info_resp
-                        file_id = (
-                            file_info.get("fileId")
-                            or file_info.get("file_id")
-                            or file_info.get("FileId")
-                        )
-                        if file_id:
-                            logger.info(
-                                f"【302跳转服务】MD5 秒传获取 file_id 成功: {file_id}"
-                            )
-                except Exception as e:
-                    logger.warning(f"【302跳转服务】MD5 秒传失败: {e}")
+            # Step 1: rapid import token
+            logger.info(f"【302跳转服务】rapid_get_token gcid={gcid}")
+            token_resp = self._client.rapid_get_token(
+                gcid=gcid,
+                name=name or "video.mp4",
+                size=size,
+                parent_id="",
+            )
+            logger.debug(f"【302跳转服务】rapid_get_token resp: {token_resp}")
+            task_id = token_resp.get("data", {}).get("taskId") or token_resp.get("data", {}).get("task_id")
+            if not task_id:
+                return JSONResponse(
+                    {"state": False, "message": f"获取 task_id 失败: {token_resp.get('msg')}"}, 500
+                )
+            logger.info(f"【302跳转服务】task_id={task_id}")
+
+            # Step 2: check_can_flash_upload
+            logger.info(f"【302跳转服务】rapid_check_flash task_id={task_id}")
+            check_resp = self._client.rapid_check_flash(task_id=task_id, gcid=gcid, size=size)
+            logger.debug(f"【302跳转服务】rapid_check_flash resp: {check_resp}")
+            check_data = check_resp.get("data") or {}
+            if check_data.get("canFlashUpload") is True:
+                logger.info("【302跳转服务】canFlashUpload=true")
+            else:
+                logger.warning(f"【302跳转服务】canFlashUpload != true: {check_resp}")
+
+            # Step 3: poll upload_info until file_id returned
+            logger.info(f"【302跳转服务】开始轮询 upload_info")
+            for i in range(12):
+                info_resp = self._client.rapid_upload_info(task_id=task_id)
+                logger.debug(f"【302跳转服务】upload_info poll {i+1}: {info_resp}")
+                info_data = info_resp.get("data") or info_resp
+                file_id = (
+                    info_data.get("fileId")
+                    or info_data.get("file_id")
+                    or info_data.get("id")
+                )
+                status = info_data.get("taskStatus") or info_data.get("task_status") or info_data.get("status")
+                if file_id:
+                    logger.info(f"【302跳转服务】秒传成功 file_id={file_id}")
+                    break
+                if status in (3, 4, "3", "4", "FAIL", "ERROR", "CANCEL", "失败", "错误", "取消"):
+                    logger.error(f"【302跳转服务】秒传任务失败 status={status}")
+                    return JSONResponse({"state": False, "message": f"秒传任务失败: {status}"}, 500)
+                import time
+                time.sleep(2)
+            else:
+                logger.error("【302跳转服务】秒传超时")
+                return JSONResponse({"state": False, "message": "秒传任务超时"}, 504)
 
             if not file_id:
-                return JSONResponse(
-                    {"state": False, "message": "无法获取文件下载地址"}, 500
-                )
+                return JSONResponse({"state": False, "message": "秒传未返回 file_id"}, 500)
 
+            # Step 4: download_url
             user_agent = request.headers.get("User-Agent") or ""
-            resp = self._client.download_url(
-                file_id=file_id,
-            )
-            download_url = resp.get("data", {}).get("downloadUrl") or resp.get("data", {}).get("DownloadUrl")
+            logger.info(f"【302跳转服务】获取 download_url file_id={file_id}")
+            download_url = self._client.get_download_url(file_id=file_id)
             if not download_url:
-                return JSONResponse(
-                    {"state": False, "message": f"获取下载地址失败: {resp}"}, 500
-                )
+                return JSONResponse({"state": False, "message": "获取下载地址失败"}, 500)
             logger.info(f"【302跳转服务】获取光鸭下载地址成功: {download_url}")
         except Exception as e:
             logger.error(f"【302跳转服务】获取下载地址失败: {e}")
@@ -201,15 +221,14 @@ class GYAPStrmSelfuse(_PluginBase):
     def play(
         self,
         request: Request,
-        md5: str = "",
+        gcid: str = "",
         name: str = "",
     ):
         """
         光鸭云盘播放跳转
-
         直接复用 redirect_url 逻辑
         """
-        return self.redirect_url(request=request, name=name, size=0, md5=md5)
+        return self.redirect_url(request=request, name=name, size=0, gcid=gcid)
 
     def get_service(self) -> Optional[List[Dict[str, Any]]]:
         """
