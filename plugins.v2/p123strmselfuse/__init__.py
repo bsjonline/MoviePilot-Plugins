@@ -225,10 +225,12 @@ class FullSyncStrmHelper:
 
             try:
                 # 123 列表接口要求显式 driveId，个人盘=0。iterdir 内部不会自动注入，
-                # 必须从 payload 传入，否则根目录及子目录遍历都会报 driveId is required。
+                # 必须从 payload 传入；同时强制用 list_method="list"（旧 /file/list 端点，
+                # 对 driveId=0 接受，默认的 list_new 端点会报 driveId is required）。
                 for item in iterdir(
                     client=self.client,
                     payload={"parentFileId": int(parent_id), "driveId": 0},
+                    list_method="list",
                     cooldown=1,
                     max_depth=-1,
                     keep_raw=True,
@@ -589,7 +591,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.5.3"
+    plugin_version = "1.5.4"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
