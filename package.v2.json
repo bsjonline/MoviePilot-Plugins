@@ -3,7 +3,7 @@
     "name": "123STRM",
     "description": "123云盘STRM生成一条龙服务",
     "labels": "云盘",
-    "version": "1.4.5",
+    "version": "1.4.6",
     "release": false,
     "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
     "author": "bsjonline",
@@ -54,7 +54,8 @@
       "v1.4.2": "修复mkdir 404: path改为file/mkdir(complete_url自动加/api/前缀)，原api/v1/file/mkdir导致双重/api",
       "v1.4.3": "修复mkdir 404根因: 123个人盘无独立mkdir端点，目录即upload_request(type=1)，复用vendor.upload_request带driveId",
       "v1.4.4": "修复全量STRM生成失败: get_file_item存储名容错(123云盘/123云盘储存等候选); 回收站为空5056降级INFO",
-      "v1.4.5": "修复重复播放秒传失败: 目录已存在时123返回5060, 改为先查根目录复用我的秒传FileId不重复mkdir"
+      "v1.4.5": "修复重复播放秒传失败: 目录已存在时123返回5060, 改为先查根目录复用我的秒传FileId不重复mkdir",
+      "v1.4.6": "修复获取目录失败: list_with_drive(0)真实环境失败, 改为先mkdir(已验证可用)再5060查根目录复用"
     },
     "system_version": ">=2.13.0"
   }

@@ -113,10 +113,32 @@ class P123AutoClient:
     def _get_or_create_miaochuan_dir(self, dir_name: str = "我的秒传") -> int | None:
         """
         获取（或创建）"我的秒传"目录的 FileId。
-        关键：目录已存在时 123 会返回 5060，不能每次都 mkdir。
-        先列根目录查是否已存在同名目录(Type=1)，存在则复用其 FileId；
-        不存在才 mkdir；mkdir 仍 5060 时再查一次兜底。
+        策略：先直接 mkdir（路径已被验证可用），
+          - code=0  -> 新建成功，返回 FileId
+          - code=5060 -> 目录已存在，list 根目录查回 FileId 复用
+        若 mkdir 异常，再兜底 list 根目录查；都失败返回 None。
         """
+        # 1. 先直接 mkdir（已被验证可用）
+        try:
+            resp = self.mkdir_with_drive(dir_name)
+            logger.info(f"【302跳转服务】mkdir 响应: {resp}")
+            if isinstance(resp, dict):
+                if resp.get("code") == 0:
+                    return int(resp["data"]["Info"]["FileId"])
+                if resp.get("code") == 5060:
+                    # 已存在，查根目录拿 FileId 复用
+                    fid = self._find_dir_in_root(dir_name)
+                    if fid is not None:
+                        return fid
+                    logger.error(f"【302跳转服务】mkdir 5060 但根目录未找到{dir_name}")
+        except Exception as e:
+            logger.error(f"【302跳转服务】创建{dir_name}目录异常: {e}")
+
+        # 2. mkdir 异常时兜底查 list
+        return self._find_dir_in_root(dir_name)
+
+    def _find_dir_in_root(self, dir_name: str) -> int | None:
+        """列根目录查同名目录(Type=1)，返回 FileId 或 None"""
         try:
             resp = self.list_with_drive(0)
             if isinstance(resp, dict) and resp.get("code") in (0, 200):
@@ -126,28 +148,7 @@ class P123AutoClient:
                        int(item.get("Type") or item.get("type") or 0) == 1:
                         return int(item.get("FileId") or item.get("fileId"))
         except Exception as e:
-            logger.error(f"【302跳转服务】查询{dir_name}目录异常: {e}")
-
-        # 根目录无此目录 -> 创建
-        try:
-            resp = self.mkdir_with_drive(dir_name)
-            logger.info(f"【302跳转服务】mkdir 响应: {resp}")
-            if isinstance(resp, dict):
-                if resp.get("code") == 0:
-                    return int(resp["data"]["Info"]["FileId"])
-                if resp.get("code") == 5060:
-                    # 并发/竞态导致刚创建好，再查一次根目录
-                    try:
-                        r2 = self.list_with_drive(0)
-                        if isinstance(r2, dict) and r2.get("code") in (0, 200):
-                            for item in r2.get("data", {}).get("FileList") or []:
-                                if (item.get("FileName") == dir_name or item.get("filename") == dir_name) and \
-                                   int(item.get("Type") or item.get("type") or 0) == 1:
-                                    return int(item.get("FileId") or item.get("fileId"))
-                    except Exception:
-                        pass
-        except Exception as e:
-            logger.error(f"【302跳转服务】创建{dir_name}目录失败: {e}")
+            logger.error(f"【302跳转服务】查询{dir_name}根目录异常: {e}")
         return None
 
     def _scan_drive_fields(self, obj, _seen=None):

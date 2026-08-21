@@ -201,15 +201,18 @@ def test_2d_diag_when_missing():
 
 
 def test_4_dir_reuse():
-    """根目录已存在"我的秒传"目录(Type=1)时，_get_or_create_miaochuan_dir 应复用其 FileId 且不调用 mkdir"""
+    """目录已存在时：先 mkdir 返回 5060，再查根目录复用已存在目录的 FileId(43352156)"""
     c = tool.P123AutoClient("p", "w")
     c.set_drive_id(0)
     # 触发 _client 懒加载创建
     c._get_client()
-    # 让根目录列表返回已存在的"我的秒传"目录
     orig = c._client.request
 
     def patched(url, method="GET", **kwargs):
+        if url.endswith("file/upload_request"):
+            # 目录已存在 -> 5060
+            if kwargs.get("json", {}).get("type") == 1:
+                return {"code": 5060, "message": "同名文件已存在", "data": {}}
         if url.endswith("file/list"):
             p = kwargs.get("params", {})
             if p.get("parentFileId") == 0:
@@ -233,15 +236,26 @@ def test_4_dir_reuse():
     c._client.request = patched
     fid = c._get_or_create_miaochuan_dir("我的秒传")
     assert fid == 43352156, f"应复用已存在目录 FileId=43352156，实际 {fid}"
-    # 确认没有发起 mkdir（type=1 的 upload_request 调用）
-    mkdir_calls = [
-        call
-        for call in c._client.calls
-        if call["url"].endswith("file/upload_request")
-        and call["kwargs"].get("json", {}).get("type") == 1
-    ]
-    assert not mkdir_calls, f"目录已存在时不应再调 mkdir: {mkdir_calls}"
-    print("[PASS] test_4_dir_reuse: 目录已存在时复用 FileId 且不重复 mkdir")
+    print("[PASS] test_4_dir_reuse: 目录已存在时 mkdir 5060 后查根目录复用 FileId")
+
+
+def test_4b_dir_create():
+    """目录不存在时：mkdir 返回 code=0 新建成功，直接拿 FileId"""
+    c = tool.P123AutoClient("p", "w")
+    c.set_drive_id(0)
+    c._get_client()
+    orig = c._client.request
+
+    def patched(url, method="GET", **kwargs):
+        if url.endswith("file/upload_request"):
+            if kwargs.get("json", {}).get("type") == 1:
+                return {"code": 0, "data": {"Info": {"FileId": 43352156}}}
+        return orig(url, method, **kwargs)
+
+    c._client.request = patched
+    fid = c._get_or_create_miaochuan_dir("我的秒传")
+    assert fid == 43352156, f"应新建目录 FileId=43352156，实际 {fid}"
+    print("[PASS] test_4b_dir_create: 目录不存在时 mkdir 直接新建成功")
 
 
 if __name__ == "__main__":
@@ -252,4 +266,5 @@ if __name__ == "__main__":
     test_2d_diag_when_missing()
     test_3_5060_reuse()
     test_4_dir_reuse()
+    test_4b_dir_create()
     print("\n全部测试通过 ✅")
