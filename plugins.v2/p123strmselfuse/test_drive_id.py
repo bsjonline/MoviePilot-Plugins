@@ -37,9 +37,11 @@ class FakeP123Client:
     def request(self, url, method="GET", **kwargs):
         self.calls.append({"url": url, "method": method, "kwargs": kwargs})
         # 默认成功：建目录返回父目录 ID；秒传返回新 FileId；列表返回文件
-        if url.endswith("file/mkdir"):
-            return {"code": 0, "data": {"Info": {"FileId": 999}}}
         if url.endswith("file/upload_request"):
+            # 根据 payload 的 type 区分目录/文件
+            p = kwargs.get("json", {})
+            if p.get("type") == 1:
+                return {"code": 0, "data": {"Info": {"FileId": 999}}}
             return {"code": 0, "data": {"Info": {"FileId": 888}}}
         if url.endswith("file/list"):
             return {
@@ -56,6 +58,10 @@ class FakeP123Client:
                 },
             }
         return {"code": 0, "data": {}}
+
+    def upload_request(self, payload, base_url="https://123pan.com/b"):
+        # 复用 request 的 mock 行为，把 payload 嵌进 kwargs
+        return self.request("file/upload_request", "POST", json=payload, base_url=base_url)
 
 
 fake_p123.P123Client = FakeP123Client
@@ -79,12 +85,12 @@ def test_1_drive_id_injected():
     c.list_with_drive(999)
     calls = c._client.calls
     assert any(
-        call["url"].endswith("file/mkdir")
-        and call["kwargs"]["json"].get("driveId") == 456
-        and call["kwargs"]["json"].get("filename") == "我的秒传"
+        call["url"].endswith("file/upload_request")
         and call["kwargs"]["json"].get("type") == 1
+        and call["kwargs"]["json"].get("driveId") == 456
+        and call["kwargs"]["json"].get("fileName") == "我的秒传"
         for call in calls
-    ), f"mkdir 未带 driveId=456 或字段不符: {calls}"
+    ), f"mkdir 未走 upload_request(type=1) 或 driveId 不符: {calls}"
     assert any(
         call["url"].endswith("file/upload_request")
         and call["kwargs"]["json"].get("driveId") == 456
@@ -133,12 +139,15 @@ def test_3_5060_reuse():
     c.set_drive_id(456)
     # 先触发 _client 创建
     c.mkdir_with_drive("我的秒传")
-    # 让 upload_request 返回 5060，模拟同名冲突
+    # 让第二次 upload_request（秒传文件）返回 5060，模拟同名冲突；第一次（mkdir）正常
     orig_request = c._client.request
+    _up_calls = {"n": 0}
 
     def patched(url, method="GET", **kwargs):
         if url.endswith("file/upload_request"):
-            return {"code": 5060, "message": "同名文件已存在"}
+            _up_calls["n"] += 1
+            if _up_calls["n"] >= 2:  # 第一次是 mkdir，第二次才是秒传文件
+                return {"code": 5060, "message": "同名文件已存在"}
         return orig_request(url, method, **kwargs)
 
     c._client.request = patched
