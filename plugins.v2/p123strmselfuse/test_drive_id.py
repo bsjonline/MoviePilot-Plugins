@@ -159,9 +159,41 @@ def test_3_5060_reuse():
         raise AssertionError(f"未触发 5060: {up_resp}")
 
 
+def test_2c_drive_id_from_fs_list():
+    """user_info/JWT 均无，fs_list 根目录响应含 driveId -> 正确取到"""
+    c = tool.P123AutoClient("p", "w")
+    c.mkdir_with_drive("我的秒传")  # 触发 _client 创建
+    c._client._user_info_resp = {"code": 0, "data": {"UID": 1}}
+
+    def patched(url, method="GET", **kwargs):
+        if url.endswith("file/list"):
+            return {"code": 0, "data": {"driveId": 654, "FileList": []}}
+        return c._client._orig_request(url, method, **kwargs)
+
+    c._client._orig_request = c._client.request
+    c._client.request = patched
+    did, src = c.resolve_drive_id()
+    assert did == 654 and src == "fs_list", f"应从 fs_list 取 654，实际 ({did},{src})"
+    print("[PASS] test_2c_drive_id_from_fs_list: 从 fs_list 根目录取到 driveId=654")
+
+
+def test_2d_diag_when_missing():
+    """全部取不到 -> 返回 (0,'none') 且 _last_drive_diag 含 user_info/fs_list 记录"""
+    c = tool.P123AutoClient("p", "w")
+    c.mkdir_with_drive("我的秒传")
+    c._client._user_info_resp = {"code": 0, "data": {"UID": 1}}
+    did, src = c.resolve_drive_id()
+    assert did == 0 and src == "none"
+    diag = c._last_drive_diag
+    assert "user_info" in diag and "fs_list_root" in diag, f"缺诊断: {list(diag)}"
+    print("[PASS] test_2d_diag_when_missing: 取不到时记录完整诊断信息")
+
+
 if __name__ == "__main__":
     test_1_drive_id_injected()
     test_2_no_drive_id_fallback_zero()
     test_2b_drive_id_from_jwt()
+    test_2c_drive_id_from_fs_list()
+    test_2d_diag_when_missing()
     test_3_5060_reuse()
     print("\n全部测试通过 ✅")

@@ -563,7 +563,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.3.9"
+    plugin_version = "1.3.10"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -694,14 +694,18 @@ class P123StrmSelfuse(_PluginBase):
                 self._client.set_drive_id(drive_id)
                 logger.info(f"【插件初始化】获取 driveId 成功: {drive_id} (来源: {drive_source})")
             else:
-                # 诊断：把 JWT token_user_info 的字段名打出来，便于确认 driveId 字段
+                # 诊断：完整打印各来源响应，确认真实 driveId 字段名
+                diag = getattr(self._client, "_last_drive_diag", {})
+                token_preview = ""
                 try:
-                    tui_keys = list(self._client.token_user_info.keys())
+                    tk = str(self._client.token_user_info)
+                    token_preview = tk[:200]
                 except Exception:
-                    tui_keys = []
+                    pass
                 logger.warning(
-                    "【插件初始化】未能取到 driveId（driveId 仍为 0，秒传/建目录可能 400）。"
-                    f" JWT claim keys={tui_keys}"
+                    "【插件初始化】未能取到 driveId（仍为 0，秒传/建目录可能 400）。\n"
+                    f"诊断信息: {diag}\n"
+                    f"JWT 预览: {token_preview}"
                 )
         except Exception as e:
             logger.error(f"【插件初始化】获取用户ID失败: {e}")

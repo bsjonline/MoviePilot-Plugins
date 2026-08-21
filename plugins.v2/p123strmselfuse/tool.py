@@ -12,6 +12,7 @@ class P123AutoClient:
         self._password = password
         # 123 新接口要求显式 driveId，传 0 会被拒（400 driveId is required）
         self._drive_id = 0
+        self._last_drive_diag = {}
 
     def set_drive_id(self, drive_id):
         """设置 driveId（从 user_info 返回中取，取不到则保持默认 0）"""
@@ -106,40 +107,76 @@ class P123AutoClient:
             base_url="https://123pan.com/b",
         )
 
+    def _scan_drive_fields(self, obj, _seen=None):
+        """
+        递归扫描任意结构，找 key 含 'drive' 且值为非零整数的字段，返回 (值, 路径)
+        """
+        if _seen is None:
+            _seen = set()
+        if id(obj) in _seen:
+            return None
+        _seen.add(id(obj))
+        found = []
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if isinstance(k, str) and "drive" in k.lower():
+                    if isinstance(v, int) and v != 0:
+                        found.append((v, k))
+                    elif isinstance(v, str) and v.isdigit() and v != "0":
+                        found.append((int(v), k))
+                found.extend(self._scan_drive_fields(v, _seen) or [])
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                found.extend(self._scan_drive_fields(item, _seen) or [])
+        return found or None
+
     def resolve_drive_id(self):
         """
         从多个来源防御式解析 driveId，优先级：
-          1. user_info() 返回的 data（defaultDriveId|driveId|drive_id）
-          2. 登录 JWT 的 token_user_info claim（123 个人盘 driveId 常在此）
-        取不到返回 0，并在调用方决定是否告警。
-        返回 (drive_id:int, source:str)
+          1. user_info() 返回的 data（defaultDriveId|driveId|drive_id 等任意含 drive 的字段）
+          2. 登录 JWT 的 token_user_info claim
+          3. fs_list 根目录响应（123 列表接口常回显 driveId）
+        取不到返回 (0, "none")，并把诊断信息存到 self._last_drive_diag
         """
         client = self._get_client()
+        diag = {}
         # 1) user_info
         try:
             ui = client.user_info()
+            diag["user_info"] = ui
             if isinstance(ui, dict):
                 data = ui.get("data") or ui
-                for k in ("defaultDriveId", "driveId", "drive_id"):
-                    if data.get(k):
-                        return int(data[k]), "user_info"
-        except Exception:
-            pass
+                hits = self._scan_drive_fields(data)
+                if hits:
+                    return hits[0][0], "user_info"
+        except Exception as e:
+            diag["user_info_error"] = str(e)
         # 2) JWT token_user_info
         try:
             tui = client.token_user_info
+            diag["jwt_keys"] = list(tui.keys()) if isinstance(tui, dict) else "non-dict"
             if isinstance(tui, dict):
-                for k in ("defaultDriveId", "driveId", "drive_id", "space"):
-                    if tui.get(k):
-                        return int(tui[k]), "jwt"
-                # 有的账号 driveId 在 driveList 列表里
-                dl = tui.get("driveList") or tui.get("drive_list")
-                if isinstance(dl, list) and dl:
-                    first = dl[0]
-                    if isinstance(first, dict) and (first.get("driveId") or first.get("id")):
-                        return int(first.get("driveId") or first.get("id")), "jwt.driveList"
-        except Exception:
-            pass
+                hits = self._scan_drive_fields(tui)
+                if hits:
+                    return hits[0][0], "jwt"
+        except Exception as e:
+            diag["jwt_error"] = str(e)
+        # 3) fs_list 根目录（可能回显 driveId）
+        try:
+            resp = client.request(
+                "file/list",
+                "GET",
+                params={"parentFileId": 0, "driveId": 0, "limit": 1},
+                base_url="https://123pan.com/b",
+            )
+            diag["fs_list_root"] = resp
+            if isinstance(resp, dict):
+                hits = self._scan_drive_fields(resp)
+                if hits:
+                    return hits[0][0], "fs_list"
+        except Exception as e:
+            diag["fs_list_error"] = str(e)
+        self._last_drive_diag = diag
         return 0, "none"
 
     def __getattr__(self, name):
