@@ -3,7 +3,7 @@
     "name": "123STRM",
     "description": "123云盘STRM生成一条龙服务",
     "labels": "云盘",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "release": false,
     "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
     "author": "bsjonline",
@@ -49,7 +49,8 @@
       "v1.3.9": "driveId 取值增强：user_info 不含 driveId 时回退解析登录 JWT(token_user_info) 的 driveId；取不到打诊断日志列出 JWT claim keys",
       "v1.3.10": "driveId 诊断增强：递归扫描 user_info/JWT/fs_list 根目录任意含drive字段；取不到时完整打印各来源响应，定位真实字段名",
       "v1.3.11": "mkdir 改走新版域 123pan.com/b/api/v1/file/mkdir(带driveId,个人盘合法值0)，与upload_request同代；新增mkdir响应诊断日志",
-      "v1.4.0": "版本号升至1.4.0，触发MP插件市场重新识别更新；含1.3.8-1.3.11全部driveId修复"
+      "v1.4.0": "版本号升至1.4.0，触发MP插件市场重新识别更新；含1.3.8-1.3.11全部driveId修复",
+      "v1.4.1": "消除init假警报：个人盘driveId=0为合法值(官方SDK证实)，不再WARNING；fs_list探测补orderDirection"
     },
     "system_version": ">=2.13.0"
   }

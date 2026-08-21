@@ -167,7 +167,7 @@ class P123AutoClient:
             resp = client.request(
                 "file/list",
                 "GET",
-                params={"parentFileId": 0, "driveId": 0, "limit": 1},
+                params={"parentFileId": 0, "driveId": 0, "limit": 1, "orderDirection": "asc"},
                 base_url="https://123pan.com/b",
             )
             diag["fs_list_root"] = resp

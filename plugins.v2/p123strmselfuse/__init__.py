@@ -563,7 +563,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.4.0"
+    plugin_version = "1.4.1"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -688,24 +688,18 @@ class P123StrmSelfuse(_PluginBase):
             if self._uid:
                 self._uid = str(self._uid)
             logger.info(f"【插件初始化】获取用户ID成功: {self._uid}")
-            # 123 新接口要求显式 driveId（user_info 不返回时回退 0 仍会 400）
+            # 123 个人盘 driveId 合法值为 0（官方 pan123 SDK 用 upload(drive_id=0) 正常）。
+            # resolve_drive_id 取不到非零值属正常（接口不暴露），0 即有效值，无需告警。
             drive_id, drive_source = self._client.resolve_drive_id()
             if drive_id:
                 self._client.set_drive_id(drive_id)
                 logger.info(f"【插件初始化】获取 driveId 成功: {drive_id} (来源: {drive_source})")
             else:
-                # 诊断：完整打印各来源响应，确认真实 driveId 字段名
-                diag = getattr(self._client, "_last_drive_diag", {})
-                token_preview = ""
-                try:
-                    tk = str(self._client.token_user_info)
-                    token_preview = tk[:200]
-                except Exception:
-                    pass
-                logger.warning(
-                    "【插件初始化】未能取到 driveId（仍为 0，秒传/建目录可能 400）。\n"
-                    f"诊断信息: {diag}\n"
-                    f"JWT 预览: {token_preview}"
+                # drive_id 为 0 = 个人盘默认盘，是合法值，仅 INFO 提示，不再 WARNING 噪音
+                logger.info(
+                    "【插件初始化】接口未暴露 driveId，使用个人盘默认值 0（合法值，"
+                    "官方 SDK 个人盘即 drive_id=0）。若实际秒传/建目录仍 400，"
+                    "请在播放时查看【302跳转服务】mkdir 响应日志"
                 )
         except Exception as e:
             logger.error(f"【插件初始化】获取用户ID失败: {e}")
