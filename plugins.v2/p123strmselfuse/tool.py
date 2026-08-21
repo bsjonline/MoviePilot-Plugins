@@ -33,7 +33,9 @@ class P123AutoClient:
     def mkdir_with_drive(self, name: str, parent_id: int | str = 0):
         """
         创建目录并显式带上 driveId。
-        走新版域 https://123pan.com/b（与 upload_request 同代接口），driveId 默认 0（个人盘合法值）。
+        走新版域 https://123pan.com/b，path 用 "file/mkdir"，
+        complete_url 会自动加 /api/ 前缀 -> https://123pan.com/b/api/file/mkdir
+        （与 upload_request 同代同构，driveId 默认 0 个人盘合法值）。
         """
         client = self._get_client()
         payload = {
@@ -43,7 +45,7 @@ class P123AutoClient:
             "type": 1,  # 目录
         }
         return client.request(
-            "api/v1/file/mkdir",
+            "file/mkdir",
             "POST",
             json=payload,
             base_url="https://123pan.com/b",
