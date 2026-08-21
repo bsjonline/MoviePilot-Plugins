@@ -194,9 +194,22 @@ class FullSyncStrmHelper:
             target_dir = parts[0]
 
             try:
-                fileitem = self._storagechain.get_file_item(
-                    storage="123云盘", path=Path(pan_media_dir)
-                )
+                fileitem = None
+                last_err = None
+                # storagechain 注册的存储名可能随用户配置不同而不同（如"123云盘"/"123云盘储存"），
+                # 依次尝试候选名，命中非空即用
+                for storage_name in ("123云盘", "123云盘储存", "123云盘存储", "123网盘", "p123"):
+                    try:
+                        fi = self._storagechain.get_file_item(
+                            storage=storage_name, path=Path(pan_media_dir)
+                        )
+                        if fi is not None:
+                            fileitem = fi
+                            break
+                    except Exception as e:
+                        last_err = e
+                if fileitem is None:
+                    raise last_err or RuntimeError("未找到 123 云盘存储，请检查 storagechain 配置")
                 parent_id = int(fileitem.fileid)
                 logger.info(f"【全量STRM生成】网盘媒体目录 ID 获取成功: {parent_id}")
             except Exception as e:
@@ -563,7 +576,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.4.3"
+    plugin_version = "1.4.4"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -2087,7 +2100,7 @@ class P123StrmSelfuse(_PluginBase):
         meta: MetaBase = item.get("meta")
 
         item_dest_storage: str = item_transfer.target_item.storage
-        if item_dest_storage != "123云盘":
+        if item_dest_storage not in ("123云盘", "123云盘储存", "123云盘存储", "123网盘", "p123"):
             return
 
         # 网盘目的地目录
@@ -2346,6 +2359,9 @@ class P123StrmSelfuse(_PluginBase):
             resp = self._client.fs_trash_clear()
             if resp["code"] == 7301:
                 logger.info("【回收站清理】回收站已清空")
+            elif resp["code"] == 5056:
+                # 回收站为空，属正常情况，不报错
+                logger.info("【回收站清理】回收站为空，无需清理")
             else:
                 logger.error(f"【回收站清理】清理回收站运行失败: {resp}")
         except Exception as e:
@@ -2359,9 +2375,17 @@ class P123StrmSelfuse(_PluginBase):
         try:
             logger.info("【我的秒传清理】开始清理我的秒传")
             _storagechain = StorageChain()
-            fileitem = _storagechain.get_file_item(
-                storage="123云盘", path=Path("/我的秒传")
-            )
+            fileitem = None
+            for storage_name in ("123云盘", "123云盘储存", "123云盘存储", "123网盘", "p123"):
+                try:
+                    fi = _storagechain.get_file_item(
+                        storage=storage_name, path=Path("/我的秒传")
+                    )
+                    if fi is not None:
+                        fileitem = fi
+                        break
+                except Exception:
+                    continue
             if not fileitem:
                 logger.info("【我的秒传清理】我的秒传目录为空，无需清理")
                 return
