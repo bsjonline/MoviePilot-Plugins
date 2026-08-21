@@ -16,6 +16,7 @@ class P123AutoClient:
         # 123 新接口要求显式 driveId，传 0 会被拒（400 driveId is required）
         self._drive_id = 0
         self._last_drive_diag = {}
+        self._miaochuan_dir_id = None  # 缓存"我的秒传"目录 FileId，避免每次播放都查 123
 
     def set_drive_id(self, drive_id):
         """设置 driveId（从 user_info 返回中取，取不到则保持默认 0）"""
@@ -88,10 +89,12 @@ class P123AutoClient:
         event: str = "homeListFile",
         limit: int = 100,
         next_id: int = 0,
+        trashed: bool = False,
     ):
         """
         获取文件列表并显式带上 driveId。
         对应 vendor.fs_list -> GET /api/file/list
+        显式带 trashed 参数，否则 123 真实接口报 400 '请输入Trashed'。
         """
         client = self._get_client()
         payload = {
@@ -101,6 +104,7 @@ class P123AutoClient:
             "orderDirection": "asc",
             "parentFileId": parent_id,
             "inDirectSpace": False,
+            "trashed": trashed,
             "event": event,
         }
         return client.request(
@@ -113,11 +117,14 @@ class P123AutoClient:
     def _get_or_create_miaochuan_dir(self, dir_name: str = "我的秒传") -> int | None:
         """
         获取（或创建）"我的秒传"目录的 FileId。
+        缓存：第一次成功后记住 FileId，后续直接复用，不再查询 123。
         策略：先直接 mkdir（路径已被验证可用），
           - code=0  -> 新建成功，返回 FileId
           - code=5060 -> 目录已存在，list 根目录查回 FileId 复用
         若都失败，返回 None（并记录 self._last_dir_err 供排查）。
         """
+        if getattr(self, "_miaochuan_dir_id", None):
+            return self._miaochuan_dir_id
         self._last_dir_err = None
         # 1. 先直接 mkdir（已被验证可用）
         try:
@@ -125,7 +132,8 @@ class P123AutoClient:
             logger.info(f"【302跳转服务】mkdir 响应: {resp}")
             if isinstance(resp, dict):
                 if resp.get("code") == 0:
-                    return int(resp["data"]["Info"]["FileId"])
+                    self._miaochuan_dir_id = int(resp["data"]["Info"]["FileId"])
+                    return self._miaochuan_dir_id
                 if resp.get("code") == 5060:
                     # 已存在，查根目录拿 FileId 复用
                     fid = self._find_dir_in_root(dir_name)
@@ -163,7 +171,10 @@ class P123AutoClient:
                 for item in file_list:
                     if (item.get("FileName") == dir_name or item.get("filename") == dir_name) and \
                        int(item.get("Type") or item.get("type") or 0) == 1:
-                        return int(item.get("FileId") or item.get("fileId"))
+                        fid = int(item.get("FileId") or item.get("fileId"))
+                        self._miaochuan_dir_id = fid
+                        return fid
+                self._last_dir_err = f"list_with_drive(0) 成功但未包含{dir_name}目录"
             else:
                 self._last_dir_err = f"list_with_drive(0) 返回非成功: {resp}"
         except Exception as e:

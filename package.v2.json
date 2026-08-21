@@ -3,7 +3,7 @@
     "name": "123STRM",
     "description": "123云盘STRM生成一条龙服务",
     "labels": "云盘",
-    "version": "1.4.7",
+    "version": "1.4.8",
     "release": false,
     "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
     "author": "bsjonline",
@@ -56,7 +56,8 @@
       "v1.4.4": "修复全量STRM生成失败: get_file_item存储名容错(123云盘/123云盘储存等候选); 回收站为空5056降级INFO",
       "v1.4.5": "修复重复播放秒传失败: 目录已存在时123返回5060, 改为先查根目录复用我的秒传FileId不重复mkdir",
       "v1.4.6": "修复获取目录失败: list_with_drive(0)真实环境失败, 改为先mkdir(已验证可用)再5060查根目录复用",
-      "v1.4.7": "目录获取失败时降级根目录秒传(不中断播放)+详细诊断日志(_last_dir_err暴露真实错误)"
+      "v1.4.7": "目录获取失败时降级根目录秒传(不中断播放)+详细诊断日志(_last_dir_err暴露真实错误)",
+      "v1.4.8": "修复list_with_drive缺trashed参数(400) + 缓存目录FileId + 修__getattr__陷阱(getattr带default仍触发__getattr__)"
     },
     "system_version": ">=2.13.0"
   }
