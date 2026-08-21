@@ -23,6 +23,17 @@ class FakeP123Client:
     def user_info(self):
         return self._user_info_resp
 
+    token = ""
+
+    @property
+    def token_user_info(self):
+        if not self.token or "." not in self.token:
+            return {}
+        import base64 as _b64, json as _j
+        seg = self.token.split(".", 2)[1]
+        seg += "=" * (-len(seg) % 4)
+        return _j.loads(_b64.urlsafe_b64decode(seg))
+
     def request(self, url, method="GET", **kwargs):
         self.calls.append({"url": url, "method": method, "kwargs": kwargs})
         # 默认成功：建目录返回父目录 ID；秒传返回新 FileId；列表返回文件
@@ -86,16 +97,32 @@ def test_1_drive_id_injected():
 
 
 def test_2_no_drive_id_fallback_zero():
-    """user_info 无 driveId -> set_drive_id 回退 0，不崩溃"""
+    """user_info 无 driveId -> resolve_drive_id 回退 0，不崩溃"""
     c = tool.P123AutoClient("p", "w")
-    c.set_drive_id(None)  # 模拟取不到
-    c.set_drive_id("")    # 空串
-    c.set_drive_id(0)     # 显式 0
-    assert c._drive_id == 0, f"应为 0，实际 {c._drive_id}"
+    c.mkdir_with_drive("我的秒传")  # 触发 _client 创建
+    c._client._user_info_resp = {"code": 0, "data": {"UID": 1}}  # 无 driveId
+    did, src = c.resolve_drive_id()
+    assert did == 0 and src == "none", f"应为 (0,'none')，实际 ({did},{src})"
+    c.set_drive_id(None)
     c.mkdir_with_drive("我的秒传")
-    drive = c._client.calls[-1]["kwargs"]["json"].get("driveId")
-    assert drive == 0, f"回退后 mkdir driveId 应为 0，实际 {drive}"
+    assert c._client.calls[-1]["kwargs"]["json"].get("driveId") == 0
     print("[PASS] test_2_no_drive_id_fallback_zero: 无 driveId 时回退 0")
+
+
+def test_2b_drive_id_from_jwt():
+    """user_info 无 driveId，但 JWT token_user_info 含 driveId -> 正确取到"""
+    c = tool.P123AutoClient("p", "w")
+    c.mkdir_with_drive("我的秒传")  # 触发 _client 创建
+    c._client._user_info_resp = {"code": 0, "data": {"UID": 1}}  # 无 driveId
+    # 给假 JWT：token_user_info 解析中段 -> 注入 driveId
+    import base64, json as _json
+    claim = _json.dumps({"id": 1, "driveId": 789}).encode()
+    seg = base64.urlsafe_b64encode(claim).rstrip(b"=").decode()
+    c._client.token = f"a.{seg}.c"  # 触发 token_user_info 解码
+    did, src = c.resolve_drive_id()
+    assert did == 789 and src == "jwt", f"应从 JWT 取 789，实际 ({did},{src})"
+    print("[PASS] test_2b_drive_id_from_jwt: 从 JWT token_user_info 取到 driveId=789")
+
 
 
 def test_3_5060_reuse():
@@ -135,5 +162,6 @@ def test_3_5060_reuse():
 if __name__ == "__main__":
     test_1_drive_id_injected()
     test_2_no_drive_id_fallback_zero()
+    test_2b_drive_id_from_jwt()
     test_3_5060_reuse()
     print("\n全部测试通过 ✅")

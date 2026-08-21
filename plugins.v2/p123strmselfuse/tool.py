@@ -106,6 +106,42 @@ class P123AutoClient:
             base_url="https://123pan.com/b",
         )
 
+    def resolve_drive_id(self):
+        """
+        从多个来源防御式解析 driveId，优先级：
+          1. user_info() 返回的 data（defaultDriveId|driveId|drive_id）
+          2. 登录 JWT 的 token_user_info claim（123 个人盘 driveId 常在此）
+        取不到返回 0，并在调用方决定是否告警。
+        返回 (drive_id:int, source:str)
+        """
+        client = self._get_client()
+        # 1) user_info
+        try:
+            ui = client.user_info()
+            if isinstance(ui, dict):
+                data = ui.get("data") or ui
+                for k in ("defaultDriveId", "driveId", "drive_id"):
+                    if data.get(k):
+                        return int(data[k]), "user_info"
+        except Exception:
+            pass
+        # 2) JWT token_user_info
+        try:
+            tui = client.token_user_info
+            if isinstance(tui, dict):
+                for k in ("defaultDriveId", "driveId", "drive_id", "space"):
+                    if tui.get(k):
+                        return int(tui[k]), "jwt"
+                # 有的账号 driveId 在 driveList 列表里
+                dl = tui.get("driveList") or tui.get("drive_list")
+                if isinstance(dl, list) and dl:
+                    first = dl[0]
+                    if isinstance(first, dict) and (first.get("driveId") or first.get("id")):
+                        return int(first.get("driveId") or first.get("id")), "jwt.driveList"
+        except Exception:
+            pass
+        return 0, "none"
+
     def __getattr__(self, name):
         if self._client is None:
             self._client = P123Client(passport=self._passport, password=self._password)

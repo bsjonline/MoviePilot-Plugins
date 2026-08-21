@@ -563,7 +563,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.3.8"
+    plugin_version = "1.3.9"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -688,19 +688,20 @@ class P123StrmSelfuse(_PluginBase):
             if self._uid:
                 self._uid = str(self._uid)
             logger.info(f"【插件初始化】获取用户ID成功: {self._uid}")
-            # 123 新接口要求显式 driveId，从 user_info 防御式取值
-            drive_id = (
-                data.get("defaultDriveId")
-                or data.get("driveId")
-                or data.get("drive_id")
-            )
+            # 123 新接口要求显式 driveId（user_info 不返回时回退 0 仍会 400）
+            drive_id, drive_source = self._client.resolve_drive_id()
             if drive_id:
                 self._client.set_drive_id(drive_id)
-                logger.info(f"【插件初始化】获取 driveId 成功: {drive_id}")
+                logger.info(f"【插件初始化】获取 driveId 成功: {drive_id} (来源: {drive_source})")
             else:
+                # 诊断：把 JWT token_user_info 的字段名打出来，便于确认 driveId 字段
+                try:
+                    tui_keys = list(self._client.token_user_info.keys())
+                except Exception:
+                    tui_keys = []
                 logger.warning(
-                    "【插件初始化】user_info 未返回 driveId，将回退为 0（"
-                    "秒传/建目录可能因 400 driveId is required 失败）"
+                    "【插件初始化】未能取到 driveId（driveId 仍为 0，秒传/建目录可能 400）。"
+                    f" JWT claim keys={tui_keys}"
                 )
         except Exception as e:
             logger.error(f"【插件初始化】获取用户ID失败: {e}")
