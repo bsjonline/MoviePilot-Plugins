@@ -114,13 +114,15 @@ class P123AutoClient:
             base_url="https://123pan.com/b",
         )
 
-    def _get_or_create_miaochuan_dir(self, dir_name: str = "我的秒传") -> int | None:
+    def _get_or_create_miaochuan_dir(self, dir_name: str = "我的秒传", fallback_id: int | None = None) -> int | None:
         """
         获取（或创建）"我的秒传"目录的 FileId。
         缓存：第一次成功后记住 FileId，后续直接复用，不再查询 123。
         策略：先直接 mkdir（路径已被验证可用），
           - code=0  -> 新建成功，返回 FileId
           - code=5060 -> 目录已存在，list 根目录查回 FileId 复用
+        fallback_id: 当 list 查不到但目录确已存在时（mkdir 5060）的兜底 FileId
+          （如已知"我的秒传"的 FileId=43352156，从配置读取）。
         若都失败，返回 None（并记录 self._last_dir_err 供排查）。
         """
         if getattr(self, "_miaochuan_dir_id", None):
@@ -139,6 +141,10 @@ class P123AutoClient:
                     fid = self._find_dir_in_root(dir_name)
                     if fid is not None:
                         return fid
+                    if fallback_id:
+                        self._miaochuan_dir_id = int(fallback_id)
+                        logger.info(f"【302跳转服务】mkdir 5060 且 list 未查到，使用兜底目录ID={fallback_id}")
+                        return self._miaochuan_dir_id
                     self._last_dir_err = (
                         f"mkdir 返回5060({dir_name}已存在)但 list_with_drive(0) "
                         f"未查到该目录，无法复用 FileId"
@@ -175,6 +181,11 @@ class P123AutoClient:
                         self._miaochuan_dir_id = fid
                         return fid
                 self._last_dir_err = f"list_with_drive(0) 成功但未包含{dir_name}目录"
+                dirs = [
+                    (it.get("FileName") or it.get("filename"), it.get("Type") or it.get("type"))
+                    for it in file_list
+                ]
+                logger.error(f"【302跳转服务】根目录文件/目录列表(共{len(file_list)}项): {dirs}")
             else:
                 self._last_dir_err = f"list_with_drive(0) 返回非成功: {resp}"
         except Exception as e:

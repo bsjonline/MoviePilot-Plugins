@@ -576,7 +576,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.4.8"
+    plugin_version = "1.4.9"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -669,6 +669,9 @@ class P123StrmSelfuse(_PluginBase):
             self._clear_recyclebin_enabled = config.get("clear_recyclebin_enabled")
             self._clear_receive_path_enabled = config.get("clear_receive_path_enabled")
             self._cron_clear = config.get("cron_clear")
+            # "我的秒传"目录 FileId 兜底：list 查不到时使用。
+            # 默认 43352156 为本账号已知值（12:48 mkdir 成功返回），可在 MP 插件配置 dir_file_id 覆盖。
+            self._dir_file_id = config.get("dir_file_id") or "43352156"
             self._deduplicate_strm_enabled = config.get("deduplicate_strm_enabled")
             self._deduplicate_strm_paths = config.get("deduplicate_strm_paths", "")
             self._deduplicate_strm_keep_longest = config.get("deduplicate_strm_keep_longest", True)
@@ -1967,7 +1970,9 @@ class P123StrmSelfuse(_PluginBase):
                 }
             else:
                 try:
-                    parent_file_id = self._client._get_or_create_miaochuan_dir("我的秒传")
+                    parent_file_id = self._client._get_or_create_miaochuan_dir(
+                        "我的秒传", fallback_id=int(self._dir_file_id) if str(self._dir_file_id).isdigit() else None
+                    )
                     if not parent_file_id:
                         err = getattr(self._client, "_last_dir_err", "未知原因")
                         logger.error(f"【302跳转服务】获取/创建我的秒传目录失败: {err}")
