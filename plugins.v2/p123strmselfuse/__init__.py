@@ -157,6 +157,7 @@ class FullSyncStrmHelper:
         user_rmt_mediaext: str,
         user_download_mediaext: str,
         server_address: str,
+        pan_dir_id: str = "",
         auto_download_mediainfo: bool = False,
     ):
         self.rmt_mediaext = [
@@ -168,6 +169,7 @@ class FullSyncStrmHelper:
         ]
         self.auto_download_mediainfo = auto_download_mediainfo
         self.client = client
+        self.pan_dir_id = pan_dir_id
         self.strm_count = 0
         self.mediainfo_count = 0
         self.strm_fail_count = 0
@@ -190,28 +192,33 @@ class FullSyncStrmHelper:
             if not path:
                 continue
             parts = path.split("#", 1)
-            pan_media_dir = parts[1]
+            pan_media_dir = parts[1] if len(parts) > 1 else ""
             target_dir = parts[0]
 
             try:
-                fileitem = None
-                last_err = None
-                # storagechain 注册的存储名可能随用户配置不同而不同（如"123云盘"/"123云盘储存"），
-                # 依次尝试候选名，命中非空即用
-                for storage_name in ("123云盘", "123云盘储存", "123云盘存储", "123网盘", "p123"):
-                    try:
-                        fi = self._storagechain.get_file_item(
-                            storage=storage_name, path=Path(pan_media_dir)
-                        )
-                        if fi is not None:
-                            fileitem = fi
-                            break
-                    except Exception as e:
-                        last_err = e
-                if fileitem is None:
-                    raise last_err or RuntimeError("未找到 123 云盘存储，请检查 storagechain 配置")
-                parent_id = int(fileitem.fileid)
-                logger.info(f"【全量STRM生成】网盘媒体目录 ID 获取成功: {parent_id}")
+                # 优先使用用户配置的云盘媒体目录ID（直接填ID，跳过路径解析，避免存储名不匹配导致NoneType）
+                if self.pan_dir_id and str(self.pan_dir_id).strip().isdigit():
+                    parent_id = int(self.pan_dir_id)
+                    logger.info(f"【全量STRM生成】使用配置的云盘媒体目录 ID: {parent_id}")
+                else:
+                    fileitem = None
+                    last_err = None
+                    # storagechain 注册的存储名可能随用户配置不同而不同（如"123云盘"/"123云盘储存"），
+                    # 依次尝试候选名，命中非空即用
+                    for storage_name in ("123云盘", "123云盘储存", "123云盘存储", "123网盘", "p123"):
+                        try:
+                            fi = self._storagechain.get_file_item(
+                                storage=storage_name, path=Path(pan_media_dir)
+                            )
+                            if fi is not None:
+                                fileitem = fi
+                                break
+                        except Exception as e:
+                            last_err = e
+                    if fileitem is None:
+                        raise last_err or RuntimeError("未找到 123 云盘存储，请检查 storagechain 配置")
+                    parent_id = int(fileitem.fileid)
+                    logger.info(f"【全量STRM生成】网盘媒体目录 ID 获取成功: {parent_id}")
             except Exception as e:
                 logger.error(f"【全量STRM生成】网盘媒体目录 ID 获取失败: {e}")
                 return False
@@ -226,10 +233,14 @@ class FullSyncStrmHelper:
                 ):
                     if item["is_dir"]:
                         continue
-                    file_path = pan_media_dir + "/" + item["relpath"]
-                    file_path = Path(target_dir) / Path(file_path).relative_to(
-                        pan_media_dir
-                    )
+                    if pan_media_dir:
+                        file_path = pan_media_dir + "/" + item["relpath"]
+                        file_path = Path(target_dir) / Path(file_path).relative_to(
+                            pan_media_dir
+                        )
+                    else:
+                        # ID 模式：云盘目录ID直接指定，relpath 直接挂到本地 target_dir 下
+                        file_path = Path(target_dir) / item["relpath"]
                     file_target_dir = file_path.parent
                     file_name = file_path.stem + ".strm"
                     new_file_path = file_target_dir / file_name
@@ -576,7 +587,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.4.9"
+    plugin_version = "1.5.0"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -655,6 +666,7 @@ class P123StrmSelfuse(_PluginBase):
             )
             self._cron_full_sync_strm = config.get("cron_full_sync_strm")
             self._full_sync_strm_paths = config.get("full_sync_strm_paths")
+            self._full_sync_pan_dir_id = config.get("full_sync_pan_dir_id") or ""
             self._full_sync_overwrite_mode = config.get(
                 "full_sync_overwrite_mode", "never"
             )
@@ -2304,6 +2316,7 @@ class P123StrmSelfuse(_PluginBase):
             auto_download_mediainfo=self._full_sync_auto_download_mediainfo_enabled,
             client=self._client,
             server_address=self.moviepilot_address,
+            pan_dir_id=self._full_sync_pan_dir_id,
         )
         strm_helper.generate_strm_files(
             full_sync_strm_paths=self._full_sync_strm_paths,
