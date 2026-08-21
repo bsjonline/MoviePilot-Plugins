@@ -10,6 +10,101 @@ class P123AutoClient:
         self._client = None
         self._passport = passport
         self._password = password
+        # 123 新接口要求显式 driveId，传 0 会被拒（400 driveId is required）
+        self._drive_id = 0
+
+    def set_drive_id(self, drive_id):
+        """设置 driveId（从 user_info 返回中取，取不到则保持默认 0）"""
+        try:
+            self._drive_id = int(drive_id) if drive_id not in (None, "", 0) else 0
+        except (TypeError, ValueError):
+            self._drive_id = 0
+
+    def _get_client(self):
+        if self._client is None:
+            self._client = P123Client(passport=self._passport, password=self._password)
+        return self._client
+
+    # ------------------------------------------------------------------
+    # 路径 1：绕开 vendor 默认 driveId:0，直接构造带 driveId 的请求，
+    # 不依赖 dict_key_to_lower_merge 的合并优先级（该私有函数语义未知）。
+    # ------------------------------------------------------------------
+    def mkdir_with_drive(self, name: str, parent_id: int | str = 0):
+        """
+        创建目录并显式带上 driveId。
+        对应 vendor.fs_mkdir -> POST /upload/v1/file/mkdir
+        """
+        client = self._get_client()
+        payload = {
+            "name": name,
+            "parentID": parent_id,
+            "driveId": self._drive_id,
+        }
+        return client.request(
+            "/upload/v1/file/mkdir",
+            "POST",
+            json=payload,
+            base_url="https://open-api.123pan.com",
+        )
+
+    def upload_fast_with_drive(
+        self,
+        file_md5: str = "",
+        file_name: str = "",
+        file_size: int = 0,
+        parent_id: int | str = 0,
+        duplicate: int = 0,
+        not_reuse: bool = False,
+    ):
+        """
+        尝试秒传文件并显式带上 driveId。
+        对应 vendor.upload_request -> POST /api/file/upload_request
+        """
+        client = self._get_client()
+        payload = {
+            "fileName": file_name,
+            "driveId": self._drive_id,
+            "duplicate": duplicate,
+            "etag": file_md5,
+            "parentFileId": parent_id,
+            "size": file_size,
+            "type": 0,
+            "NotReuse": not_reuse,
+        }
+        return client.request(
+            "file/upload_request",
+            "POST",
+            json=payload,
+            base_url="https://123pan.com/b",
+        )
+
+    def list_with_drive(
+        self,
+        parent_id: int | str = 0,
+        event: str = "homeListFile",
+        limit: int = 100,
+        next_id: int = 0,
+    ):
+        """
+        获取文件列表并显式带上 driveId。
+        对应 vendor.fs_list -> GET /api/file/list
+        """
+        client = self._get_client()
+        payload = {
+            "driveId": self._drive_id,
+            "limit": limit,
+            "next": next_id,
+            "orderDirection": "asc",
+            "parentFileId": parent_id,
+            "inDirectSpace": False,
+            "event": event,
+        }
+        return client.request(
+            "file/list",
+            "GET",
+            params=payload,
+            base_url="https://123pan.com/b",
+        )
 
     def __getattr__(self, name):
         if self._client is None:

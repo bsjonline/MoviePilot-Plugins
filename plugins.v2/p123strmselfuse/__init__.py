@@ -563,7 +563,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.3.7"
+    plugin_version = "1.3.8"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -688,6 +688,20 @@ class P123StrmSelfuse(_PluginBase):
             if self._uid:
                 self._uid = str(self._uid)
             logger.info(f"【插件初始化】获取用户ID成功: {self._uid}")
+            # 123 新接口要求显式 driveId，从 user_info 防御式取值
+            drive_id = (
+                data.get("defaultDriveId")
+                or data.get("driveId")
+                or data.get("drive_id")
+            )
+            if drive_id:
+                self._client.set_drive_id(drive_id)
+                logger.info(f"【插件初始化】获取 driveId 成功: {drive_id}")
+            else:
+                logger.warning(
+                    "【插件初始化】user_info 未返回 driveId，将回退为 0（"
+                    "秒传/建目录可能因 400 driveId is required 失败）"
+                )
         except Exception as e:
             logger.error(f"【插件初始化】获取用户ID失败: {e}")
             self._client = None
@@ -1883,6 +1897,42 @@ class P123StrmSelfuse(_PluginBase):
 
         return RedirectResponse(download_url, 302)
 
+    def _find_existing_file_id(
+        self,
+        parent_file_id: int | str,
+        name: str,
+        md5: str = "",
+        size: int = 0,
+    ):
+        """
+        秒传冲突(5060)时，在“我的秒传”目录内按 文件名+etag+size 查找已存在的文件，
+        复用其 FileId。找不到返回 None。
+        123 秒传冲突是跨目录全局匹配，但“我的秒传”下理论上只有这一条，
+        所以直接按文件名精确匹配即可。
+        """
+        try:
+            resp = self._client.list_with_drive(parent_file_id)
+            if not isinstance(resp, dict) or resp.get("code") not in (0, 200):
+                logger.error(f"【302跳转服务】查找已有文件失败: {resp}")
+                return None
+            file_list = resp.get("data", {}).get("FileList") or resp.get(
+                "data", {}
+            ).get("fileList") or []
+            for item in file_list:
+                if item.get("FileName") == name or item.get("filename") == name:
+                    # 进一步用 etag/size 确认是同一文件
+                    if (not md5 or item.get("Etag") == md5 or item.get("etag") == md5) and (
+                        not size or int(item.get("Size") or item.get("size") or 0) == int(size)
+                    ):
+                        return item.get("FileId") or item.get("fileId")
+            # 仅按文件名兜底（极端情况 etag 不一致但确为同一文件）
+            for item in file_list:
+                if item.get("FileName") == name or item.get("filename") == name:
+                    return item.get("FileId") or item.get("fileId")
+        except Exception as e:
+            logger.error(f"【302跳转服务】查找已有文件异常: {e}")
+        return None
+
     def redirect_url(
         self,
         request: Request,
@@ -1905,15 +1955,45 @@ class P123StrmSelfuse(_PluginBase):
                 }
             else:
                 try:
-                    resp = self._client.fs_mkdir("我的秒传")
+                    resp = self._client.mkdir_with_drive("我的秒传")
                     check_response(resp)
-                    resp = self._client.upload_file_fast(
+                    parent_file_id = resp["data"]["Info"]["FileId"]
+                    resp = self._client.upload_fast_with_drive(
                         file_md5=md5,
                         file_name=name,
                         file_size=int(size) if size else 0,
-                        parent_id=resp["data"]["Info"]["FileId"],
+                        parent_id=parent_file_id,
                         duplicate=2,
                     )
+                    # 5060 = 同名文件已存在（秒传命中跨目录全局冲突）。
+                    # 正确做法是复用已有文件的 FileId，而非报错。
+                    if isinstance(resp, dict) and resp.get("code") == 5060:
+                        logger.warning(
+                            f"【302跳转服务】秒传 {name} 检测到同名冲突(5060)，"
+                            f"尝试复用已有文件 FileId"
+                        )
+                        existing = self._find_existing_file_id(
+                            parent_file_id, name, md5, size
+                        )
+                        if existing is not None:
+                            resp = {
+                                "code": 0,
+                                "data": {"Info": {"FileId": existing}},
+                            }
+                            logger.info(
+                                f"【302跳转服务】复用已有文件 FileId 成功: {existing}"
+                            )
+                        else:
+                            logger.error(
+                                f"【302跳转服务】秒传 {name} 冲突且未找到可复用文件"
+                            )
+                            return JSONResponse(
+                                {
+                                    "state": False,
+                                    "message": f"秒传 {name} 文件失败: 同名冲突且无复用记录",
+                                },
+                                500,
+                            )
                     check_response(resp)
                     payload = {
                         "FileId": resp["data"]["Info"]["FileId"],
