@@ -587,7 +587,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.5.0"
+    plugin_version = "1.5.1"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -1162,6 +1162,43 @@ class P123StrmSelfuse(_PluginBase):
                             },
                         ],
                     }
+                ],
+            },
+            {
+                "component": "VRow",
+                "content": [
+                    {
+                        "component": "VCol",
+                        "props": {"cols": 12, "md": 6},
+                        "content": [
+                            {
+                                "component": "VTextField",
+                                "props": {
+                                    "model": "dir_file_id",
+                                    "label": "我的秒传目录ID（播放秒传用）",
+                                    "placeholder": "如 43352156，留空则用默认值",
+                                    "hint": "302播放秒传时文件存放的「我的秒传」目录 FileId。留空默认 43352156。在123网盘网页端目录URL可见。",
+                                    "persistent-hint": True,
+                                },
+                            }
+                        ],
+                    },
+                    {
+                        "component": "VCol",
+                        "props": {"cols": 12, "md": 6},
+                        "content": [
+                            {
+                                "component": "VTextField",
+                                "props": {
+                                    "model": "full_sync_pan_dir_id",
+                                    "label": "云盘媒体目录ID（全量同步用）",
+                                    "placeholder": "如 12345678，留空则按下方路径解析",
+                                    "hint": "全量同步扫描的网盘媒体目录 FileId。填了直接用于遍历，跳过路径解析（避免存储名不匹配报错）。留空则按「全量同步目录」每行#后的网盘路径解析。",
+                                    "persistent-hint": True,
+                                },
+                            }
+                        ],
+                    },
                 ],
             },
         ]

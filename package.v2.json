@@ -3,7 +3,7 @@
     "name": "123STRM",
     "description": "123云盘STRM生成一条龙服务",
     "labels": "云盘",
-    "version": "1.5.0",
+    "version": "1.5.1",
     "release": false,
     "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
     "author": "bsjonline",
@@ -59,7 +59,8 @@
       "v1.4.7": "目录获取失败时降级根目录秒传(不中断播放)+详细诊断日志(_last_dir_err暴露真实错误)",
       "v1.4.8": "修复list_with_drive缺trashed参数(400) + 缓存目录FileId + 修__getattr__陷阱(getattr带default仍触发__getattr__)",
       "v1.4.9": "list查不到我的秒传时用已知FileId(43352156)兜底 + 诊断日志打印根目录列表便于定位匹配问题",
-      "v1.5.0": "新增两个配置项: dir_file_id(我的秒传目录ID,播放用,替代硬编码) + full_sync_pan_dir_id(云盘媒体目录ID,全量同步直接填ID跳过路径解析)"
+      "v1.5.0": "新增两个配置项: dir_file_id(我的秒传目录ID,播放用,替代硬编码) + full_sync_pan_dir_id(云盘媒体目录ID,全量同步直接填ID跳过路径解析)",
+      "v1.5.1": "在get_form()全量同步tab补充两个输入框(dir_file_id/full_sync_pan_dir_id), 之前仅init_plugin读取但无表单声明导致后台不可见"
     },
     "system_version": ">=2.13.0"
   }
