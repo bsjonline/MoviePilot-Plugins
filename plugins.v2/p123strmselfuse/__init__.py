@@ -576,7 +576,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.4.6"
+    plugin_version = "1.4.7"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -1969,10 +1969,10 @@ class P123StrmSelfuse(_PluginBase):
                 try:
                     parent_file_id = self._client._get_or_create_miaochuan_dir("我的秒传")
                     if not parent_file_id:
-                        logger.error("【302跳转服务】获取/创建我的秒传目录失败")
-                        return JSONResponse(
-                            {"state": False, "message": "获取我的秒传目录失败"}, 500
-                        )
+                        err = getattr(self._client, "_last_dir_err", "未知原因")
+                        logger.error(f"【302跳转服务】获取/创建我的秒传目录失败: {err}")
+                        logger.warning("【302跳转服务】降级为根目录(parentFileId=0)秒传，文件将落在网盘根目录而非'我的秒传'")
+                        parent_file_id = 0
                     resp = self._client.upload_fast_with_drive(
                         file_md5=md5,
                         file_name=name,

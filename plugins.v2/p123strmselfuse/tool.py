@@ -116,8 +116,9 @@ class P123AutoClient:
         策略：先直接 mkdir（路径已被验证可用），
           - code=0  -> 新建成功，返回 FileId
           - code=5060 -> 目录已存在，list 根目录查回 FileId 复用
-        若 mkdir 异常，再兜底 list 根目录查；都失败返回 None。
+        若都失败，返回 None（并记录 self._last_dir_err 供排查）。
         """
+        self._last_dir_err = None
         # 1. 先直接 mkdir（已被验证可用）
         try:
             resp = self.mkdir_with_drive(dir_name)
@@ -130,24 +131,43 @@ class P123AutoClient:
                     fid = self._find_dir_in_root(dir_name)
                     if fid is not None:
                         return fid
-                    logger.error(f"【302跳转服务】mkdir 5060 但根目录未找到{dir_name}")
+                    self._last_dir_err = (
+                        f"mkdir 返回5060({dir_name}已存在)但 list_with_drive(0) "
+                        f"未查到该目录，无法复用 FileId"
+                    )
+                    logger.error(f"【302跳转服务】{self._last_dir_err}")
+            else:
+                self._last_dir_err = f"mkdir_with_drive 返回非 dict: {type(resp)} {resp}"
+                logger.error(f"【302跳转服务】{self._last_dir_err}")
         except Exception as e:
+            self._last_dir_err = f"mkdir_with_drive 异常: {repr(e)}"
             logger.error(f"【302跳转服务】创建{dir_name}目录异常: {e}")
 
         # 2. mkdir 异常时兜底查 list
-        return self._find_dir_in_root(dir_name)
+        fid = self._find_dir_in_root(dir_name)
+        if fid is not None:
+            return fid
+        if self._last_dir_err is None:
+            self._last_dir_err = f"list_with_drive(0) 未找到{dir_name}目录"
+            logger.error(f"【302跳转服务】{self._last_dir_err}")
+        return None
 
     def _find_dir_in_root(self, dir_name: str) -> int | None:
         """列根目录查同名目录(Type=1)，返回 FileId 或 None"""
         try:
+            logger.info(f"【302跳转服务】查询根目录列表(用于复用{dir_name})")
             resp = self.list_with_drive(0)
+            logger.info(f"【302跳转服务】list_with_drive(0) 响应: {resp}")
             if isinstance(resp, dict) and resp.get("code") in (0, 200):
                 file_list = resp.get("data", {}).get("FileList") or []
                 for item in file_list:
                     if (item.get("FileName") == dir_name or item.get("filename") == dir_name) and \
                        int(item.get("Type") or item.get("type") or 0) == 1:
                         return int(item.get("FileId") or item.get("fileId"))
+            else:
+                self._last_dir_err = f"list_with_drive(0) 返回非成功: {resp}"
         except Exception as e:
+            self._last_dir_err = f"list_with_drive(0) 异常: {repr(e)}"
             logger.error(f"【302跳转服务】查询{dir_name}根目录异常: {e}")
         return None
 
