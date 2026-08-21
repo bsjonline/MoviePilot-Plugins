@@ -563,7 +563,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.3.10"
+    plugin_version = "1.3.11"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -1961,6 +1961,7 @@ class P123StrmSelfuse(_PluginBase):
             else:
                 try:
                     resp = self._client.mkdir_with_drive("我的秒传")
+                    logger.info(f"【302跳转服务】mkdir 响应: {resp}")
                     check_response(resp)
                     parent_file_id = resp["data"]["Info"]["FileId"]
                     resp = self._client.upload_fast_with_drive(

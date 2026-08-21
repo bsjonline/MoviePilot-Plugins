@@ -37,7 +37,7 @@ class FakeP123Client:
     def request(self, url, method="GET", **kwargs):
         self.calls.append({"url": url, "method": method, "kwargs": kwargs})
         # 默认成功：建目录返回父目录 ID；秒传返回新 FileId；列表返回文件
-        if url.endswith("/upload/v1/file/mkdir"):
+        if url.endswith("api/v1/file/mkdir"):
             return {"code": 0, "data": {"Info": {"FileId": 999}}}
         if url.endswith("file/upload_request"):
             return {"code": 0, "data": {"Info": {"FileId": 888}}}
@@ -79,10 +79,12 @@ def test_1_drive_id_injected():
     c.list_with_drive(999)
     calls = c._client.calls
     assert any(
-        call["url"].endswith("/upload/v1/file/mkdir")
+        call["url"].endswith("api/v1/file/mkdir")
         and call["kwargs"]["json"].get("driveId") == 456
+        and call["kwargs"]["json"].get("filename") == "我的秒传"
+        and call["kwargs"]["json"].get("type") == 1
         for call in calls
-    ), f"mkdir 未带 driveId=456: {calls}"
+    ), f"mkdir 未带 driveId=456 或字段不符: {calls}"
     assert any(
         call["url"].endswith("file/upload_request")
         and call["kwargs"]["json"].get("driveId") == 456

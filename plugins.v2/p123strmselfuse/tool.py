@@ -33,19 +33,20 @@ class P123AutoClient:
     def mkdir_with_drive(self, name: str, parent_id: int | str = 0):
         """
         创建目录并显式带上 driveId。
-        对应 vendor.fs_mkdir -> POST /upload/v1/file/mkdir
+        走新版域 https://123pan.com/b（与 upload_request 同代接口），driveId 默认 0（个人盘合法值）。
         """
         client = self._get_client()
         payload = {
-            "name": name,
-            "parentID": parent_id,
+            "filename": name,
+            "parentFileId": parent_id,
             "driveId": self._drive_id,
+            "type": 1,  # 目录
         }
         return client.request(
-            "/upload/v1/file/mkdir",
+            "api/v1/file/mkdir",
             "POST",
             json=payload,
-            base_url="https://open-api.123pan.com",
+            base_url="https://123pan.com/b",
         )
 
     def upload_fast_with_drive(
