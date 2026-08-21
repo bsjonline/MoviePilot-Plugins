@@ -1,4 +1,7 @@
 from p123client import P123Client
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class P123AutoClient:
@@ -106,6 +109,46 @@ class P123AutoClient:
             params=payload,
             base_url="https://123pan.com/b",
         )
+
+    def _get_or_create_miaochuan_dir(self, dir_name: str = "我的秒传") -> int | None:
+        """
+        获取（或创建）"我的秒传"目录的 FileId。
+        关键：目录已存在时 123 会返回 5060，不能每次都 mkdir。
+        先列根目录查是否已存在同名目录(Type=1)，存在则复用其 FileId；
+        不存在才 mkdir；mkdir 仍 5060 时再查一次兜底。
+        """
+        try:
+            resp = self.list_with_drive(0)
+            if isinstance(resp, dict) and resp.get("code") in (0, 200):
+                file_list = resp.get("data", {}).get("FileList") or []
+                for item in file_list:
+                    if (item.get("FileName") == dir_name or item.get("filename") == dir_name) and \
+                       int(item.get("Type") or item.get("type") or 0) == 1:
+                        return int(item.get("FileId") or item.get("fileId"))
+        except Exception as e:
+            logger.error(f"【302跳转服务】查询{dir_name}目录异常: {e}")
+
+        # 根目录无此目录 -> 创建
+        try:
+            resp = self.mkdir_with_drive(dir_name)
+            logger.info(f"【302跳转服务】mkdir 响应: {resp}")
+            if isinstance(resp, dict):
+                if resp.get("code") == 0:
+                    return int(resp["data"]["Info"]["FileId"])
+                if resp.get("code") == 5060:
+                    # 并发/竞态导致刚创建好，再查一次根目录
+                    try:
+                        r2 = self.list_with_drive(0)
+                        if isinstance(r2, dict) and r2.get("code") in (0, 200):
+                            for item in r2.get("data", {}).get("FileList") or []:
+                                if (item.get("FileName") == dir_name or item.get("filename") == dir_name) and \
+                                   int(item.get("Type") or item.get("type") or 0) == 1:
+                                    return int(item.get("FileId") or item.get("fileId"))
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.error(f"【302跳转服务】创建{dir_name}目录失败: {e}")
+        return None
 
     def _scan_drive_fields(self, obj, _seen=None):
         """

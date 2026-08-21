@@ -200,6 +200,50 @@ def test_2d_diag_when_missing():
     print("[PASS] test_2d_diag_when_missing: 取不到时记录完整诊断信息")
 
 
+def test_4_dir_reuse():
+    """根目录已存在"我的秒传"目录(Type=1)时，_get_or_create_miaochuan_dir 应复用其 FileId 且不调用 mkdir"""
+    c = tool.P123AutoClient("p", "w")
+    c.set_drive_id(0)
+    # 触发 _client 懒加载创建
+    c._get_client()
+    # 让根目录列表返回已存在的"我的秒传"目录
+    orig = c._client.request
+
+    def patched(url, method="GET", **kwargs):
+        if url.endswith("file/list"):
+            p = kwargs.get("params", {})
+            if p.get("parentFileId") == 0:
+                return {
+                    "code": 0,
+                    "data": {
+                        "FileList": [
+                            {
+                                "FileId": 43352156,
+                                "FileName": "我的秒传",
+                                "Type": 1,
+                                "Size": 0,
+                                "Etag": "",
+                                "ParentFileId": 0,
+                            }
+                        ]
+                    },
+                }
+        return orig(url, method, **kwargs)
+
+    c._client.request = patched
+    fid = c._get_or_create_miaochuan_dir("我的秒传")
+    assert fid == 43352156, f"应复用已存在目录 FileId=43352156，实际 {fid}"
+    # 确认没有发起 mkdir（type=1 的 upload_request 调用）
+    mkdir_calls = [
+        call
+        for call in c._client.calls
+        if call["url"].endswith("file/upload_request")
+        and call["kwargs"].get("json", {}).get("type") == 1
+    ]
+    assert not mkdir_calls, f"目录已存在时不应再调 mkdir: {mkdir_calls}"
+    print("[PASS] test_4_dir_reuse: 目录已存在时复用 FileId 且不重复 mkdir")
+
+
 if __name__ == "__main__":
     test_1_drive_id_injected()
     test_2_no_drive_id_fallback_zero()
@@ -207,4 +251,5 @@ if __name__ == "__main__":
     test_2c_drive_id_from_fs_list()
     test_2d_diag_when_missing()
     test_3_5060_reuse()
+    test_4_dir_reuse()
     print("\n全部测试通过 ✅")
