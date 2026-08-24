@@ -5,7 +5,7 @@
 STRM 中不持久化 file_id，只保留 md5+size+name，fileId 播放时临时解析。
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -28,7 +28,7 @@ class GYAPStrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "0.2.1"
+    plugin_version = "0.2.2"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -50,12 +50,6 @@ class GYAPStrmSelfuse(_PluginBase):
             "type": "string",
             "value": "我的秒传",
         },
-        "gyap_enabled": {
-            "desc": "启用插件",
-            "type": "string",
-            "value": "yes",
-            "options": ["yes", "no"],
-        },
     }
     # 插件系统配置
     system_version = ">=2.13.0"
@@ -64,7 +58,7 @@ class GYAPStrmSelfuse(_PluginBase):
         """
         插件初始化
         """
-        self._enabled = (config or {}).get("gyap_enabled", "yes") == "yes"
+        self._enabled = bool((config or {}).get("enabled", True))
         if not config:
             return
         if not self._enabled:
@@ -217,9 +211,9 @@ class GYAPStrmSelfuse(_PluginBase):
         """
         return []
 
-    def get_form(self) -> List[Dict[str, Any]]:
+    def get_form(self) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """
-        返回插件配置表单
+        拼装插件配置页面，需要返回两块数据：1、页面配置；2、数据结构
         """
         return [
             {
@@ -264,6 +258,7 @@ class GYAPStrmSelfuse(_PluginBase):
                                         "props": {
                                             "model": "gyap_md5_dir",
                                             "label": "秒传目录名",
+                                            "placeholder": "默认 我的秒传",
                                         },
                                     }
                                 ],
@@ -275,7 +270,7 @@ class GYAPStrmSelfuse(_PluginBase):
                                     {
                                         "component": "VSwitch",
                                         "props": {
-                                            "model": "gyap_enabled",
+                                            "model": "enabled",
                                             "label": "启用插件",
                                         },
                                     }
@@ -285,7 +280,12 @@ class GYAPStrmSelfuse(_PluginBase):
                     }
                 ],
             }
-        ]
+        ], {
+            "enabled": True,
+            "gyap_access_token": "",
+            "gyap_device_id": "",
+            "gyap_md5_dir": "我的秒传",
+        }
 
     def get_page(self) -> List[Dict[str, Any]]:
         """

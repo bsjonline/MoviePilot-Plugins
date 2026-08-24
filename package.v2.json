@@ -71,14 +71,15 @@
     "name": "gyapstrmselfuse",
     "description": "光鸭云盘STRM生成一条龙服务",
     "labels": "云盘",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
     "author": "bsjonline",
     "level": 1,
     "history": {
       "v0.1.0": "初始版本：基于GCID秒传播放，不依赖file_id持久化",
       "v0.2.0": "重写秒传链路：MD5+size查光鸭服务端库存(code156命中)，秒传目录复用已有文件，未命中自动清理任务；STRM参数gcid改为md5",
-      "v0.2.1": "修复安装后不显示: 移除不存在的app.helper.mdc导入(import失败导致加载被跳过)"
+      "v0.2.1": "修复安装后不显示: 移除不存在的app.helper.mdc导入(import失败导致加载被跳过)",
+      "v0.2.2": "修复配置项打不开: get_form改为返回(表单,默认数据dict)二元组"
     },
     "system_version": ">=2.13.0"
   }

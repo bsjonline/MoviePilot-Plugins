@@ -14,6 +14,11 @@
     "description_zh": "基于 MD5 秒传（服务端库存查询）播放。STRM 中只保留 md5+size+name，播放时临时解析 fileId 并 302 到签名直链。",
     "changelog": [
       {
+        "version": "0.2.2",
+        "date": "2026-08-24",
+        "content": "修复配置项打不开：get_form 改为返回(表单, 默认数据dict)二元组，对齐 PluginBase 合同"
+      },
+      {
         "version": "0.2.1",
         "date": "2026-08-24",
         "content": "修复安装后不显示：移除不存在的 app.helper.mdc 导入(官方MP无此模块,import失败导致插件加载被跳过)"
@@ -29,6 +34,6 @@
         "content": "初始版本：基于 GCID 秒传播放，不依赖 file_id 持久化"
       }
     ],
-    "version": "0.2.1"
+    "version": "0.2.2"
   }
 }
