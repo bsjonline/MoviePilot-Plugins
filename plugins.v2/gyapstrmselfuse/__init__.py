@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from app.plugins import _PluginBase
 from app.log import logger
 from app.core.event import eventmanager, Event
-from app.schemas.types import EventType, MessageType
+from app.schemas.types import EventType, NotificationType
 
 from .tool import GuangyaAutoClient
 
@@ -30,7 +30,7 @@ class GYAPStrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "0.3.1"
+    plugin_version = "0.3.2"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -178,11 +178,11 @@ class GYAPStrmSelfuse(_PluginBase):
     def _command_send_code(self):
         client = getattr(self, "_client", None)
         if not self.get_state() or client is None:
-            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text="插件未启用或客户端未初始化")
+            self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text="插件未启用或客户端未初始化")
             return
         phone = self._form_value("gyap_sms_phone")
         if not phone:
-            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text="请先在配置页填写手机号并保存")
+            self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text="请先在配置页填写手机号并保存")
             return
         if not phone.startswith("+"):
             phone = f"+86 {phone}"
@@ -190,12 +190,12 @@ class GYAPStrmSelfuse(_PluginBase):
             init_resp = client.login_sms_init(phone)
             captcha_token = init_resp.get("captcha_token") or ""
             if not captcha_token:
-                self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"人机验证失败: {init_resp}")
+                self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text=f"人机验证失败: {init_resp}")
                 return
             send_resp = client.login_sms_send(phone, captcha_token)
             verification_id = send_resp.get("verification_id") or ""
             if not verification_id:
-                self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"发送验证码失败: {send_resp}")
+                self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text=f"发送验证码失败: {send_resp}")
                 return
             # 会话上下文暂存到插件数据（跨请求存活）
             self.save_data("gyap_login_ctx", {
@@ -204,15 +204,15 @@ class GYAPStrmSelfuse(_PluginBase):
                 "verification_id": verification_id,
             })
             logger.info(f"【光鸭STRM】短信验证码已发送: {phone}")
-            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"验证码已发送到 {phone}，收到后填入验证码点【验证并登录】")
+            self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text=f"验证码已发送到 {phone}，收到后填入验证码点【验证并登录】")
         except Exception as e:
             logger.error(f"【光鸭STRM】短信登录发码失败: {e}")
-            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"发码失败: {e}")
+            self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text=f"发码失败: {e}")
 
     def _command_verify_code(self):
         client = getattr(self, "_client", None)
         if not self.get_state() or client is None:
-            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text="插件未启用或客户端未初始化")
+            self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text="插件未启用或客户端未初始化")
             return
         ctx = None
         try:
@@ -220,17 +220,17 @@ class GYAPStrmSelfuse(_PluginBase):
         except Exception:
             pass
         if not ctx or not ctx.get("verification_id"):
-            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text="请先点【发送验证码】")
+            self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text="请先点【发送验证码】")
             return
         code = self._form_value("gyap_sms_code")
         if not code:
-            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text="请先在配置页填写短信验证码并保存")
+            self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text="请先在配置页填写短信验证码并保存")
             return
         try:
             verify_resp = client.login_sms_verify(ctx["verification_id"], code)
             verification_token = verify_resp.get("verification_token") or ""
             if not verification_token:
-                self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"验证码校验失败: {verify_resp}")
+                self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text=f"验证码校验失败: {verify_resp}")
                 return
             signin_resp = client.login_sms_signin(
                 code=code,
@@ -239,7 +239,7 @@ class GYAPStrmSelfuse(_PluginBase):
                 captcha_token=ctx["captcha_token"],
             )
             if not signin_resp.get("access_token"):
-                self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"登录失败: {signin_resp}")
+                self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text=f"登录失败: {signin_resp}")
                 return
             # 清理会话上下文；token 已由刷新回调自动持久化
             try:
@@ -248,13 +248,13 @@ class GYAPStrmSelfuse(_PluginBase):
                 pass
             logger.info(f"【光鸭STRM】短信登录成功，token 已持久化 (phone={ctx['phone']})")
             self.post_message(
-                mtype=MessageType.Plugin,
+                mtype=NotificationType.Plugin,
                 title="光鸭云盘STRM",
                 text=f"登录成功！token 已保存（有效期{signin_resp.get('expires_in', '?')}秒），后续自动刷新续期",
             )
         except Exception as e:
             logger.error(f"【光鸭STRM】短信登录失败: {e}")
-            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"登录失败: {e}")
+            self.post_message(mtype=NotificationType.Plugin, title="光鸭云盘STRM", text=f"登录失败: {e}")
 
     def get_api(self) -> List[Dict[str, Any]]:
         """
