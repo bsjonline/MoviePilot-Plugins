@@ -1,5 +1,6 @@
 import time
-from typing import Any, Dict, List, Optional
+from secrets import token_hex
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
@@ -8,11 +9,17 @@ class GuangyaAutoClient:
     """
     光鸭云盘客户端（纯服务端，Bearer token 认证）
 
-    全部接口走 api.guangyapan.com/nd.bizuserres.s 域名，
+    业务接口走 api.guangyapan.com/nd.bizuserres.s 域名，
     与光鸭批量助手V4油猴脚本一致。
+
+    登录采用 TgtoDrive 同款手机号短信验证码方案：
+      login_sms_init → login_sms_send → (用户收码) → login_sms_verify → login_sms_signin
+    登录成功后持久化 access_token/refresh_token，请求层自动刷新续期。
     """
 
     BASE = "https://api.guangyapan.com"
+    ACCOUNT_BASE = "https://account.guangyapan.com"
+    CLIENT_ID = "aMe-8VSlkrbQXpUR"
     PATH_LIST = "/nd.bizuserres.s/v1/file/get_file_list"
     PATH_CREATE_DIR = "/nd.bizuserres.s/v1/file/create_dir"
     PATH_RES_TOKEN = "/nd.bizuserres.s/v1/get_res_center_token"
@@ -25,9 +32,19 @@ class GuangyaAutoClient:
     CODE_RES_TOKEN_INSTANT = 156  # 秒传命中，文件已直接进入网盘
     CODE_DIR_EXISTS = 159  # 目录已存在
 
-    def __init__(self, access_token: str, device_id: str = ""):
-        self._access_token = access_token.strip()
-        self._device_id = device_id.strip()
+    # token 刷新回调（由插件层注入，用于持久化新 token）
+    on_token_refresh: Optional[Callable[[str, str], None]] = None
+
+    def __init__(
+        self,
+        access_token: str = "",
+        device_id: str = "",
+        refresh_token: str = "",
+    ):
+        self._access_token = (access_token or "").strip()
+        self._refresh_token = (refresh_token or "").strip()
+        self._device_id = (device_id or "").strip() or token_hex(16)
+        self._token_expires_at: Optional[float] = None
 
     @property
     def _headers(self) -> Dict[str, str]:
@@ -42,13 +59,208 @@ class GuangyaAutoClient:
             headers["did"] = self._device_id
         return headers
 
+    def _account_headers(self) -> Dict[str, str]:
+        """
+        account.guangyapan.com 认证域请求头（对齐 guangyaclient/TgtoDrive）
+        """
+        return {
+            "accept": "*/*",
+            "content-type": "application/json",
+            "origin": "https://www.guangyapan.com",
+            "referer": "https://www.guangyapan.com/",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "x-client-id": self.CLIENT_ID,
+            "x-client-version": "0.0.1",
+            "x-device-id": self._device_id,
+            "x-device-model": "chrome%2F131.0.0.0",
+            "x-device-name": "PC-Chrome",
+            "x-device-sign": f"wdi10.{self._device_id}{token_hex(16)}",
+            "x-net-work-type": "NONE",
+            "x-os-version": "Windows NT 10.0",
+            "x-platform-version": "1",
+            "x-protocol-version": "301",
+            "x-provider-name": "NONE",
+            "x-sdk-version": "9.0.2",
+        }
+
+    def _account_post(self, path: str, payload: Dict[str, Any], captcha_token: str = "") -> Dict[str, Any]:
+        headers = self._account_headers()
+        if captcha_token:
+            headers["x-captcha-token"] = captcha_token
+        resp = httpx.post(
+            f"{self.ACCOUNT_BASE}{path}",
+            json=payload,
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    # ---------- 短信登录（TgtoDrive 同款方案） ----------
+
+    def login_sms_init(self, phone_number: str) -> Dict[str, Any]:
+        """
+        第一步：初始化人机验证，返回 captcha_token
+        """
+        return self._account_post(
+            "/v1/shield/captcha/init",
+            {
+                "client_id": self.CLIENT_ID,
+                "action": "POST:/v1/auth/verification",
+                "device_id": self._device_id,
+                "meta": {"phone_number": phone_number},
+            },
+        )
+
+    def login_sms_send(self, phone_number: str, captcha_token: str) -> Dict[str, Any]:
+        """
+        第二步：发送短信验证码，返回 verification_id
+        """
+        return self._account_post(
+            "/v1/auth/verification",
+            {
+                "phone_number": phone_number,
+                "target": "ANY",
+                "client_id": self.CLIENT_ID,
+            },
+            captcha_token=captcha_token,
+        )
+
+    def login_sms_verify(self, verification_id: str, code: str) -> Dict[str, Any]:
+        """
+        第三步：校验短信验证码，返回 verification_token
+        """
+        return self._account_post(
+            "/v1/auth/verification/verify",
+            {
+                "verification_id": verification_id,
+                "verification_code": code,
+                "client_id": self.CLIENT_ID,
+            },
+        )
+
+    def login_sms_signin(
+        self,
+        code: str,
+        verification_token: str,
+        phone_number: str,
+        captcha_token: str,
+    ) -> Dict[str, Any]:
+        """
+        第四步：完成登录，返回 access_token/refresh_token 并更新客户端状态
+        """
+        result = self._account_post(
+            "/v1/auth/signin",
+            {
+                "verification_code": code,
+                "verification_token": verification_token,
+                "username": phone_number,
+                "client_id": self.CLIENT_ID,
+            },
+            captcha_token=captcha_token,
+        )
+        access_token = result.get("access_token")
+        if access_token:
+            self._apply_tokens(
+                access_token=access_token,
+                refresh_token=result.get("refresh_token", self._refresh_token),
+                expires_in=result.get("expires_in"),
+            )
+        return result
+
+    def _apply_tokens(
+        self,
+        access_token: str,
+        refresh_token: str = "",
+        expires_in: Optional[int] = None,
+    ):
+        """
+        应用新 token：更新内存状态、记录过期时间、触发持久化回调
+        """
+        self._access_token = (access_token or "").strip()
+        if refresh_token:
+            self._refresh_token = refresh_token.strip()
+        self._token_expires_at = (
+            time.time() + int(expires_in) - 60 if expires_in else None
+        )
+        callback = type(self).on_token_refresh or self.on_token_refresh
+        if callable(callback):
+            try:
+                callback(self._access_token, self._refresh_token)
+            except Exception:
+                pass
+
+    def refresh_token(self, refresh_token: str = "") -> Dict[str, Any]:
+        """
+        用 refresh_token 换新 access_token（401 自动触发）
+        """
+        token = (refresh_token or "").strip() or self._refresh_token
+        if not token:
+            raise ValueError("无可用的 refresh_token")
+        headers = self._account_headers()
+        headers["x-action"] = "401"
+        resp = httpx.post(
+            f"{self.ACCOUNT_BASE}/v1/auth/token",
+            json={
+                "client_id": self.CLIENT_ID,
+                "grant_type": "refresh_token",
+                "refresh_token": token,
+            },
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        access_token = result.get("access_token")
+        if access_token:
+            self._apply_tokens(
+                access_token=access_token,
+                refresh_token=result.get("refresh_token", token),
+                expires_in=result.get("expires_in"),
+            )
+        return result
+
+    @property
+    def access_token(self) -> str:
+        return self._access_token
+
+    @property
+    def refresh_token_value(self) -> str:
+        return self._refresh_token
+
+    @property
+    def device_id(self) -> str:
+        return self._device_id
+
     def _post(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # 过期自动刷新
+        if (
+            self._refresh_token
+            and self._token_expires_at
+            and time.time() >= self._token_expires_at
+        ):
+            try:
+                self.refresh_token()
+            except Exception:
+                pass
         resp = httpx.post(
             f"{self.BASE}{path}",
             json=payload,
             headers=self._headers,
             timeout=30,
         )
+        # 401 自动刷新后重试一次
+        if resp.status_code == 401 and self._refresh_token:
+            try:
+                self.refresh_token()
+                resp = httpx.post(
+                    f"{self.BASE}{path}",
+                    json=payload,
+                    headers=self._headers,
+                    timeout=30,
+                )
+            except Exception:
+                pass
         resp.raise_for_status()
         return resp.json()
 

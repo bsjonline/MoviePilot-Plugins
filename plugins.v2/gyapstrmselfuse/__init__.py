@@ -28,7 +28,7 @@ class GYAPStrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "0.2.3"
+    plugin_version = "0.3.0"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -67,6 +67,7 @@ class GYAPStrmSelfuse(_PluginBase):
             return
 
         access_token = str(config.get("gyap_access_token", "") or "").strip()
+        refresh_token_cfg = str(config.get("gyap_refresh_token", "") or "").strip()
         device_id = str(config.get("gyap_device_id", "") or "").strip()
         token_source = "本插件配置"
 
@@ -86,17 +87,35 @@ class GYAPStrmSelfuse(_PluginBase):
                     token_source = "GuangyaDisk插件"
                     if not device_id and gyd_did:
                         device_id = gyd_did
+                    if not refresh_token_cfg and gyd_refresh:
+                        refresh_token_cfg = gyd_refresh
                     logger.info(
                         f"【光鸭STRM】已从 GuangyaDisk 插件获取登录态: has_access={bool(gyd_token)}, has_refresh={bool(gyd_refresh)}, did={bool(device_id)}"
                     )
 
-        if not access_token:
-            logger.error("【光鸭STRM】未配置 Access Token 且未能从 GuangyaDisk 插件读取到登录态")
-            self._client = None
+        if not access_token and not refresh_token_cfg:
+            # 无登录态：仍创建空客户端供短信登录使用，业务接口会校验token
+            logger.warning("【光鸭STRM】暂无登录态，请调用 /login_sms_init + /login_sms_verify 短信登录")
+            try:
+                self._client = GuangyaAutoClient(
+                    access_token="",
+                    device_id=device_id,
+                    refresh_token="",
+                )
+                self._client.on_token_refresh = self._persist_tokens
+            except Exception as e:
+                logger.error(f"【光鸭STRM】光鸭云盘客户端创建失败: {e}")
+                self._client = None
             return
 
         try:
-            self._client = GuangyaAutoClient(access_token=access_token, device_id=device_id)
+            self._client = GuangyaAutoClient(
+                access_token=access_token,
+                device_id=device_id,
+                refresh_token=refresh_token_cfg,
+            )
+            # 绑定 token 刷新持久化回调（实例级）
+            self._client.on_token_refresh = self._persist_tokens
             logger.info(f"【光鸭STRM】光鸭云盘客户端初始化成功 (token来源: {token_source})")
         except Exception as e:
             logger.error(f"【光鸭STRM】光鸭云盘客户端创建失败: {e}")
@@ -129,12 +148,124 @@ class GYAPStrmSelfuse(_PluginBase):
                 "summary": "302跳转",
                 "description": "光鸭云盘302跳转到签名直链",
             },
+            {
+                "path": "/login_sms_init",
+                "endpoint": self.login_sms_init,
+                "methods": ["GET", "POST"],
+                "auth": "bear",
+                "summary": "短信登录-发码",
+                "description": "初始化人机验证并发送短信验证码",
+            },
+            {
+                "path": "/login_sms_verify",
+                "endpoint": self.login_sms_verify,
+                "methods": ["POST"],
+                "auth": "bear",
+                "summary": "短信登录-验证",
+                "description": "校验短信验证码并完成登录，持久化 token",
+            },
         ]
+
+    # ---------- 短信登录（TgtoDrive 同款：手机号验证码） ----------
+
+    def login_sms_init(
+        self,
+        phone_number: str = "",
+    ):
+        """
+        短信登录第一步：init captcha + 发送验证码
+        """
+        client = getattr(self, "_client", None)
+        if not self.get_state() or client is None:
+            return JSONResponse({"state": False, "message": "插件未启用或客户端未初始化"}, 500)
+        phone = (phone_number or "").strip()
+        if not phone:
+            return JSONResponse({"state": False, "message": "缺少 phone_number"}, 400)
+        try:
+            init_resp = client.login_sms_init(phone)
+            captcha_token = init_resp.get("captcha_token") or ""
+            if not captcha_token:
+                return JSONResponse({"state": False, "message": f"captcha init 失败: {init_resp}"}, 502)
+            send_resp = client.login_sms_send(phone, captcha_token)
+            verification_id = send_resp.get("verification_id") or ""
+            if not verification_id:
+                return JSONResponse({"state": False, "message": f"发送验证码失败: {send_resp}"}, 502)
+            # 暂存登录会话上下文
+            self._login_ctx = {
+                "phone": phone,
+                "captcha_token": captcha_token,
+                "verification_id": verification_id,
+            }
+            logger.info(f"【光鸭STRM】短信验证码已发送: {phone}")
+            return JSONResponse({"state": True, "message": "验证码已发送"})
+        except Exception as e:
+            logger.error(f"【光鸭STRM】短信登录发码失败: {e}")
+            return JSONResponse({"state": False, "message": f"发码失败: {e}"}, 500)
+
+    def login_sms_verify(
+        self,
+        code: str = "",
+    ):
+        """
+        短信登录第二步：校验验证码完成登录，token 自动持久化
+        """
+        client = getattr(self, "_client", None)
+        if not self.get_state() or client is None:
+            return JSONResponse({"state": False, "message": "插件未启用或客户端未初始化"}, 500)
+        ctx = getattr(self, "_login_ctx", None) or {}
+        if not ctx.get("verification_id"):
+            return JSONResponse({"state": False, "message": "请先调用 login_sms_init 发送验证码"}, 400)
+        sms_code = (code or "").strip()
+        if not sms_code:
+            return JSONResponse({"state": False, "message": "缺少 code"}, 400)
+        try:
+            verify_resp = client.login_sms_verify(ctx["verification_id"], sms_code)
+            verification_token = verify_resp.get("verification_token") or ""
+            if not verification_token:
+                return JSONResponse({"state": False, "message": f"验证码校验失败: {verify_resp}"}, 502)
+            signin_resp = client.login_sms_signin(
+                code=sms_code,
+                verification_token=verification_token,
+                phone_number=ctx["phone"],
+                captcha_token=ctx["captcha_token"],
+            )
+            if not signin_resp.get("access_token"):
+                return JSONResponse({"state": False, "message": f"登录失败: {signin_resp}"}, 502)
+            # 持久化新 token 到插件配置（回调已在 _apply_tokens 触发）
+            self._login_ctx = None
+            logger.info(f"【光鸭STRM】短信登录成功，token 已持久化 (phone={ctx['phone']})")
+            return JSONResponse({
+                "state": True,
+                "message": "登录成功，token 已保存",
+                "expires_in": signin_resp.get("expires_in"),
+            })
+        except Exception as e:
+            logger.error(f"【光鸭STRM】短信登录失败: {e}")
+            return JSONResponse({"state": False, "message": f"登录失败: {e}"}, 500)
+
+    def _persist_tokens(self, access_token: str, refresh_token: str):
+        """
+        token 刷新回调：把最新 token 写入插件配置持久化
+        """
+        try:
+            self.update_config({
+                "enabled": bool(getattr(self, "_enabled", True)),
+                "gyap_access_token": access_token,
+                "gyap_refresh_token": refresh_token,
+                "gyap_device_id": str(getattr(self, "_device_id", "") or ""),
+                "gyap_md5_dir": str(getattr(self, "_dir_name", "") or "我的秒传"),
+            })
+            logger.info("【光鸭STRM】token 刷新已自动保存到插件配置")
+        except Exception as e:
+            logger.warning(f"【光鸭STRM】token 持久化失败: {e}")
 
     def _resolve_target_dir(self) -> Optional[str]:
         """
         确保秒传目录存在，返回其 ID；失败返回 None
         """
+        client = getattr(self, "_client", None)
+        if client is None:
+            return None
         dir_name = str(getattr(self, "_dir_name", "") or "我的秒传").strip() or "我的秒传"
         try:
             dir_id = client.ensure_dir(dir_name, parent_id="")
@@ -265,6 +396,20 @@ class GYAPStrmSelfuse(_PluginBase):
                                     {
                                         "component": "VTextField",
                                         "props": {
+                                            "model": "gyap_refresh_token",
+                                            "label": "Refresh Token（留空自动读取）",
+                                            "placeholder": "短信登录后自动保存",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 6},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
                                             "model": "gyap_device_id",
                                             "label": "设备ID did（可选）",
                                         },
@@ -305,6 +450,7 @@ class GYAPStrmSelfuse(_PluginBase):
         ], {
             "enabled": True,
             "gyap_access_token": "",
+            "gyap_refresh_token": "",
             "gyap_device_id": "",
             "gyap_md5_dir": "我的秒传",
         }
