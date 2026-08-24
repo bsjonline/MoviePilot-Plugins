@@ -14,6 +14,11 @@
     "description_zh": "基于 MD5 秒传（服务端库存查询）播放。STRM 中只保留 md5+size+name，播放时临时解析 fileId 并 302 到签名直链。",
     "changelog": [
       {
+        "version": "0.2.1",
+        "date": "2026-08-24",
+        "content": "修复安装后不显示：移除不存在的 app.helper.mdc 导入(官方MP无此模块,import失败导致插件加载被跳过)"
+      },
+      {
         "version": "0.2.0",
         "date": "2026-08-24",
         "content": "重写秒传链路：改用 MD5+size 查询光鸭服务端库存（code 156 命中），对齐批量助手V4；秒传目录复用已有文件；未命中自动清理上传任务；STRM 参数从 gcid 改为 md5"
@@ -23,6 +28,7 @@
         "date": "2026-08-09",
         "content": "初始版本：基于 GCID 秒传播放，不依赖 file_id 持久化"
       }
-    ]
+    ],
+    "version": "0.2.1"
   }
 }
