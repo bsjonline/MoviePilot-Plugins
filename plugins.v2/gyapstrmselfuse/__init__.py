@@ -30,7 +30,7 @@ class GYAPStrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "0.3.2"
+    plugin_version = "0.3.3"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -615,15 +615,10 @@ class GYAPStrmSelfuse(_PluginBase):
                                             "color": "primary",
                                             "variant": "flat",
                                             "block": True,
-                                        },
-                                        "events": {
-                                            "click": "/gyap_send_code"
+                                            "onClick": "function(e){const api=window.MoviePilotAPI;if(!api){alert('前端API不可用');return;}const phone=gyap_sms_phone||'';if(!phone){alert('请先填写手机号');return;}api.post('plugin/GYAPStrmSelfuse/login_sms_init',{phone_number:phone}).then(r=>{const d=r.data||r;alert(d.state===false?('失败: '+(d.message||'未知错误')):('验证码已发送到 '+phone))}).catch(err=>{alert('请求失败: '+err)})}",
                                         },
                                         "content": [
-                                            {
-                                                "component": "span",
-                                                "text": "发送验证码",
-                                            }
+                                            {"component": "span", "text": "发送验证码"}
                                         ],
                                     }
                                 ],
@@ -652,9 +647,7 @@ class GYAPStrmSelfuse(_PluginBase):
                                             "color": "success",
                                             "variant": "flat",
                                             "block": True,
-                                        },
-                                        "events": {
-                                            "click": "/gyap_verify_code"
+                                            "onClick": "function(e){const api=window.MoviePilotAPI;if(!api){alert('前端API不可用');return;}const code=gyap_sms_code||'';if(!code){alert('请先填写验证码');return;}api.post('plugin/GYAPStrmSelfuse/login_sms_verify',{code:code}).then(r=>{const d=r.data||r;alert(d.state===false?('失败: '+(d.message||'未知错误')):('登录成功！token已保存，后续自动刷新'))}).catch(err=>{alert('请求失败: '+err)})}",
                                         },
                                         "content": [
                                             {
