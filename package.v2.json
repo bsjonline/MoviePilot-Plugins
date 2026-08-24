@@ -66,5 +66,19 @@
       "v1.5.4": "iterdir默认list_method=list_new(/file/list/new)对driveId=0报required, 强制改list_method='list'(旧/file/list,已验证driveId=0可用), payload仍带driveId=0"
     },
     "system_version": ">=2.13.0"
+  },
+  "GYAPStrmSelfuse": {
+    "name": "gyapstrmselfuse",
+    "description": "光鸭云盘STRM生成一条龙服务",
+    "labels": "云盘",
+    "version": "0.2.0",
+    "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
+    "author": "bsjonline",
+    "level": 1,
+    "history": {
+      "v0.1.0": "初始版本：基于GCID秒传播放，不依赖file_id持久化",
+      "v0.2.0": "重写秒传链路：MD5+size查光鸭服务端库存(code156命中)，秒传目录复用已有文件，未命中自动清理任务；STRM参数gcid改为md5"
+    },
+    "system_version": ">=2.13.0"
   }
 }
