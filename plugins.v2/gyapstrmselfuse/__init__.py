@@ -28,7 +28,7 @@ class GYAPStrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "0.2.2"
+    plugin_version = "0.2.3"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -68,14 +68,36 @@ class GYAPStrmSelfuse(_PluginBase):
 
         access_token = str(config.get("gyap_access_token", "") or "").strip()
         device_id = str(config.get("gyap_device_id", "") or "").strip()
+        token_source = "本插件配置"
+
+        # 留空时自动从 GuangyaDisk 插件读取登录态（access_token/refresh_token/device_id）
         if not access_token:
-            logger.error("【光鸭STRM】请配置光鸭云盘 Access Token")
+            gyd_config = None
+            try:
+                gyd_config = self.get_config("GuangyaDisk")
+            except Exception as e:
+                logger.warning(f"【光鸭STRM】读取 GuangyaDisk 配置失败: {e}")
+            if isinstance(gyd_config, dict):
+                gyd_token = str(gyd_config.get("access_token", "") or "").strip()
+                gyd_refresh = str(gyd_config.get("refresh_token", "") or "").strip()
+                gyd_did = str(gyd_config.get("device_id", "") or "").strip()
+                if gyd_token:
+                    access_token = gyd_token
+                    token_source = "GuangyaDisk插件"
+                    if not device_id and gyd_did:
+                        device_id = gyd_did
+                    logger.info(
+                        f"【光鸭STRM】已从 GuangyaDisk 插件获取登录态: has_access={bool(gyd_token)}, has_refresh={bool(gyd_refresh)}, did={bool(device_id)}"
+                    )
+
+        if not access_token:
+            logger.error("【光鸭STRM】未配置 Access Token 且未能从 GuangyaDisk 插件读取到登录态")
             self._client = None
             return
 
         try:
             self._client = GuangyaAutoClient(access_token=access_token, device_id=device_id)
-            logger.info("【光鸭STRM】光鸭云盘客户端初始化成功")
+            logger.info(f"【光鸭STRM】光鸭云盘客户端初始化成功 (token来源: {token_source})")
         except Exception as e:
             logger.error(f"【光鸭STRM】光鸭云盘客户端创建失败: {e}")
             self._client = None
@@ -230,8 +252,8 @@ class GYAPStrmSelfuse(_PluginBase):
                                         "component": "VTextField",
                                         "props": {
                                             "model": "gyap_access_token",
-                                            "label": "Access Token",
-                                            "placeholder": "Bearer 后面的部分",
+                                            "label": "Access Token（留空自动读取GuangyaDisk）",
+                                            "placeholder": "留空则从 GuangyaDisk 插件读取登录态",
                                         },
                                     }
                                 ],

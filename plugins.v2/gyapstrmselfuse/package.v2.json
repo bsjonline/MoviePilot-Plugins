@@ -14,6 +14,11 @@
     "description_zh": "基于 MD5 秒传（服务端库存查询）播放。STRM 中只保留 md5+size+name，播放时临时解析 fileId 并 302 到签名直链。",
     "changelog": [
       {
+        "version": "0.2.3",
+        "date": "2026-08-24",
+        "content": "新增：Access Token 留空时自动从 GuangyaDisk 插件读取登录态(token刷新跟随)，无需重复配置"
+      },
+      {
         "version": "0.2.2",
         "date": "2026-08-24",
         "content": "修复配置项打不开：get_form 改为返回(表单, 默认数据dict)二元组，对齐 PluginBase 合同"
@@ -34,6 +39,6 @@
         "content": "初始版本：基于 GCID 秒传播放，不依赖 file_id 持久化"
       }
     ],
-    "version": "0.2.2"
+    "version": "0.2.3"
   }
 }
