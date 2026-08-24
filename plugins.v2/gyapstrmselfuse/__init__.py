@@ -30,7 +30,7 @@ class GYAPStrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "0.3.3"
+    plugin_version = "0.3.4"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -290,17 +290,18 @@ class GYAPStrmSelfuse(_PluginBase):
 
     # ---------- 短信登录（TgtoDrive 同款：手机号验证码） ----------
 
-    def login_sms_init(
-        self,
-        phone_number: str = "",
-    ):
+    async def login_sms_init(self, request: Request):
         """
-        短信登录第一步：init captcha + 发送验证码
+        短信登录第一步：init captcha + 发送验证码（登录端点本身，不需要已有token）
         """
         client = getattr(self, "_client", None)
-        if not self.get_state() or client is None:
-            return JSONResponse({"state": False, "message": "插件未启用或客户端未初始化"}, 500)
-        phone = (phone_number or "").strip()
+        if client is None:
+            return JSONResponse({"state": False, "message": "客户端未初始化，请先启用插件"}, 500)
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        phone = str(body.get("phone_number", "") or "").strip()
         if not phone:
             return JSONResponse({"state": False, "message": "缺少 phone_number"}, 400)
         try:
@@ -324,20 +325,21 @@ class GYAPStrmSelfuse(_PluginBase):
             logger.error(f"【光鸭STRM】短信登录发码失败: {e}")
             return JSONResponse({"state": False, "message": f"发码失败: {e}"}, 500)
 
-    def login_sms_verify(
-        self,
-        code: str = "",
-    ):
+    async def login_sms_verify(self, request: Request):
         """
-        短信登录第二步：校验验证码完成登录，token 自动持久化
+        短信登录第二步：校验验证码完成登录，token 自动持久化（登录端点本身，不需要已有token）
         """
         client = getattr(self, "_client", None)
-        if not self.get_state() or client is None:
-            return JSONResponse({"state": False, "message": "插件未启用或客户端未初始化"}, 500)
+        if client is None:
+            return JSONResponse({"state": False, "message": "客户端未初始化，请先启用插件"}, 500)
         ctx = getattr(self, "_login_ctx", None) or {}
         if not ctx.get("verification_id"):
             return JSONResponse({"state": False, "message": "请先调用 login_sms_init 发送验证码"}, 400)
-        sms_code = (code or "").strip()
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        sms_code = str(body.get("code", "") or "").strip()
         if not sms_code:
             return JSONResponse({"state": False, "message": "缺少 code"}, 400)
         try:
