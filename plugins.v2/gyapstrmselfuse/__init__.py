@@ -493,186 +493,300 @@ class GYAPStrmSelfuse(_PluginBase):
         拼装插件配置页面，需要返回两块数据：1、页面配置；2、数据结构
         """
         return [
-            {
-                "component": "VForm",
+        {
+                "component": "VCard",
+                "props": {
+                        "variant": "outlined",
+                        "class": "mb-3"
+                },
                 "content": [
-                    {
-                        "component": "VRow",
-                        "content": [
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
+                        {
+                                "component": "VCardTitle",
+                                "props": {
+                                        "class": "d-flex align-center"
+                                },
                                 "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "gyap_access_token",
-                                            "label": "Access Token（留空自动读取GuangyaDisk）",
-                                            "placeholder": "留空则从 GuangyaDisk 插件读取登录态",
+                                        {
+                                                "component": "VIcon",
+                                                "props": {
+                                                        "icon": "mdi-cloud-upload",
+                                                        "color": "primary",
+                                                        "class": "mr-2"
+                                                }
                                         },
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "gyap_refresh_token",
-                                            "label": "Refresh Token（留空自动读取）",
-                                            "placeholder": "短信登录后自动保存",
-                                        },
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "gyap_device_id",
-                                            "label": "设备ID did（可选）",
-                                        },
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "gyap_md5_dir",
-                                            "label": "秒传目录名",
-                                            "placeholder": "默认 我的秒传",
-                                        },
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
-                                "content": [
-                                    {
-                                        "component": "VSwitch",
-                                        "props": {
-                                            "model": "enabled",
-                                            "label": "启用插件",
-                                        },
-                                    }
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        "component": "VRow",
-                        "content": [
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12},
-                                "content": [
-                                    {
-                                        "component": "VAlert",
-                                        "props": {
-                                            "type": "info",
-                                            "variant": "tonal",
-                                            "density": "compact",
-                                            "class": "mb-2",
-                                        },
-                                        "content": [
-                                            {
-                                                "component": "div",
-                                                "text": "短信登录（TgtoDrive同款）：填手机号→点【发送验证码】→收到短信后填验证码→点【验证并登录】。登录成功后 token 自动保存，后续自动刷新续期，无需再手动维护。",
-                                            },
-                                        ],
-                                    },
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 4},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "gyap_sms_phone",
-                                            "label": "手机号（含+86）",
-                                            "placeholder": "+86 13800138000",
-                                        },
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 2},
-                                "content": [
-                                    {
-                                        "component": "VBtn",
-                                        "props": {
-                                            "color": "primary",
-                                            "variant": "flat",
-                                            "block": True,
-                                            "onClick": "function(e){const api=window.MoviePilotAPI;if(!api){alert('前端API不可用');return;}const phone=gyap_sms_phone||'';if(!phone){alert('请先填写手机号');return;}api.post('plugin/GYAPStrmSelfuse/login_sms_init',{phone_number:phone}).then(r=>{const d=r.data||r;alert(d.state===false?('失败: '+(d.message||'未知错误')):('验证码已发送到 '+phone))}).catch(err=>{alert('请求失败: '+err)})}",
-                                        },
-                                        "content": [
-                                            {"component": "span", "text": "发送验证码"}
-                                        ],
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 3},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "gyap_sms_code",
-                                            "label": "短信验证码",
-                                            "placeholder": "6位数字",
-                                        },
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 3},
-                                "content": [
-                                    {
-                                        "component": "VBtn",
-                                        "props": {
-                                            "color": "success",
-                                            "variant": "flat",
-                                            "block": True,
-                                            "onClick": "function(e){const api=window.MoviePilotAPI;if(!api){alert('前端API不可用');return;}const code=gyap_sms_code||'';if(!code){alert('请先填写验证码');return;}api.post('plugin/GYAPStrmSelfuse/login_sms_verify',{code:code}).then(r=>{const d=r.data||r;alert(d.state===false?('失败: '+(d.message||'未知错误')):('登录成功！token已保存，后续自动刷新'))}).catch(err=>{alert('请求失败: '+err)})}",
-                                        },
-                                        "content": [
-                                            {
+                                        {
                                                 "component": "span",
-                                                "text": "验证并登录",
-                                            }
-                                        ],
-                                    }
-                                ],
-                            },
-                        ],
-                    },
-                ],
-            }
-        ], {
-            "enabled": True,
-            "gyap_access_token": "",
-            "gyap_refresh_token": "",
-            "gyap_device_id": "",
-            "gyap_md5_dir": "我的秒传",
-            "gyap_sms_phone": "",
-            "gyap_sms_code": "",
+                                                "text": "基础设置"
+                                        }
+                                ]
+                        },
+                        {
+                                "component": "VDivider"
+                        },
+                        {
+                                "component": "VCardText",
+                                "content": [
+                                        {
+                                                "component": "VRow",
+                                                "content": [
+                                                        {
+                                                                "component": "VCol",
+                                                                "props": {
+                                                                        "cols": 12,
+                                                                        "md": 6
+                                                                },
+                                                                "content": [
+                                                                        {
+                                                                                "component": "VTextField",
+                                                                                "props": {
+                                                                                        "model": "gyap_access_token",
+                                                                                        "label": "Access Token（留空自动读取GuangyaDisk）",
+                                                                                        "placeholder": "留空则从 GuangyaDisk 插件读取登录态"
+                                                                                }
+                                                                        }
+                                                                ]
+                                                        },
+                                                        {
+                                                                "component": "VCol",
+                                                                "props": {
+                                                                        "cols": 12,
+                                                                        "md": 6
+                                                                },
+                                                                "content": [
+                                                                        {
+                                                                                "component": "VTextField",
+                                                                                "props": {
+                                                                                        "model": "gyap_refresh_token",
+                                                                                        "label": "Refresh Token（留空自动读取）",
+                                                                                        "placeholder": "短信登录后自动保存"
+                                                                                }
+                                                                        }
+                                                                ]
+                                                        },
+                                                        {
+                                                                "component": "VCol",
+                                                                "props": {
+                                                                        "cols": 12,
+                                                                        "md": 6
+                                                                },
+                                                                "content": [
+                                                                        {
+                                                                                "component": "VTextField",
+                                                                                "props": {
+                                                                                        "model": "gyap_device_id",
+                                                                                        "label": "设备ID did（可选）"
+                                                                                }
+                                                                        }
+                                                                ]
+                                                        },
+                                                        {
+                                                                "component": "VCol",
+                                                                "props": {
+                                                                        "cols": 12,
+                                                                        "md": 6
+                                                                },
+                                                                "content": [
+                                                                        {
+                                                                                "component": "VTextField",
+                                                                                "props": {
+                                                                                        "model": "gyap_md5_dir",
+                                                                                        "label": "秒传目录名",
+                                                                                        "placeholder": "默认 我的秒传"
+                                                                                }
+                                                                        }
+                                                                ]
+                                                        },
+                                                        {
+                                                                "component": "VCol",
+                                                                "props": {
+                                                                        "cols": 12,
+                                                                        "md": 6
+                                                                },
+                                                                "content": [
+                                                                        {
+                                                                                "component": "VSwitch",
+                                                                                "props": {
+                                                                                        "model": "enabled",
+                                                                                        "label": "启用插件"
+                                                                                }
+                                                                        }
+                                                                ]
+                                                        }
+                                                ]
+                                        },
+                                        {
+                                                "component": "VRow",
+                                                "content": [
+                                                        {
+                                                                "component": "VCol",
+                                                                "props": {
+                                                                        "cols": 12
+                                                                },
+                                                                "content": [
+                                                                        {
+                                                                                "component": "VAlert",
+                                                                                "props": {
+                                                                                        "type": "info",
+                                                                                        "variant": "tonal",
+                                                                                        "density": "compact",
+                                                                                        "class": "mb-2"
+                                                                                },
+                                                                                "content": [
+                                                                                        {
+                                                                                                "component": "div",
+                                                                                                "text": "短信登录（TgtoDrive同款）：填手机号→点【发送验证码】→收到短信后填验证码→点【验证并登录】。登录成功后 token 自动保存，后续自动刷新续期，无需再手动维护。"
+                                                                                        }
+                                                                                ]
+                                                                        }
+                                                                ]
+                                                        },
+                                                        {
+                                                                "component": "VCol",
+                                                                "props": {
+                                                                        "cols": 12,
+                                                                        "md": 4
+                                                                },
+                                                                "content": [
+                                                                        {
+                                                                                "component": "VTextField",
+                                                                                "props": {
+                                                                                        "model": "gyap_sms_phone",
+                                                                                        "label": "手机号（含+86）",
+                                                                                        "placeholder": "+86 13800138000"
+                                                                                }
+                                                                        }
+                                                                ]
+                                                        },
+                                                        {
+                                                                "component": "VCol",
+                                                                "props": {
+                                                                        "cols": 12,
+                                                                        "md": 2
+                                                                },
+                                                                "content": [
+                                                                        {
+                                                                                "component": "VBtn",
+                                                                                "props": {
+                                                                                        "color": "primary",
+                                                                                        "variant": "flat",
+                                                                                        "block": True,
+                                                                                        "onClick": "function(e){const api=window.MoviePilotAPI;if(!api){alert('前端API不可用');return;}const phone=gyap_sms_phone||'';if(!phone){alert('请先填写手机号');return;}api.post('plugin/GYAPStrmSelfuse/login_sms_init',{phone_number:phone}).then(r=>{const d=r.data||r;alert(d.state===False?('失败: '+(d.message||'未知错误')):('验证码已发送到 '+phone))}).catch(err=>{alert('请求失败: '+err)})}"
+                                                                                },
+                                                                                "content": [
+                                                                                        {
+                                                                                                "component": "span",
+                                                                                                "text": "发送验证码"
+                                                                                        }
+                                                                                ]
+                                                                        }
+                                                                ]
+                                                        },
+                                                        {
+                                                                "component": "VCol",
+                                                                "props": {
+                                                                        "cols": 12,
+                                                                        "md": 3
+                                                                },
+                                                                "content": [
+                                                                        {
+                                                                                "component": "VTextField",
+                                                                                "props": {
+                                                                                        "model": "gyap_sms_code",
+                                                                                        "label": "短信验证码",
+                                                                                        "placeholder": "6位数字"
+                                                                                }
+                                                                        }
+                                                                ]
+                                                        },
+                                                        {
+                                                                "component": "VCol",
+                                                                "props": {
+                                                                        "cols": 12,
+                                                                        "md": 3
+                                                                },
+                                                                "content": [
+                                                                        {
+                                                                                "component": "VBtn",
+                                                                                "props": {
+                                                                                        "color": "success",
+                                                                                        "variant": "flat",
+                                                                                        "block": True,
+                                                                                        "onClick": "function(e){const api=window.MoviePilotAPI;if(!api){alert('前端API不可用');return;}const code=gyap_sms_code||'';if(!code){alert('请先填写验证码');return;}api.post('plugin/GYAPStrmSelfuse/login_sms_verify',{code:code}).then(r=>{const d=r.data||r;alert(d.state===False?('失败: '+(d.message||'未知错误')):('登录成功！token已保存，后续自动刷新'))}).catch(err=>{alert('请求失败: '+err)})}"
+                                                                                },
+                                                                                "content": [
+                                                                                        {
+                                                                                                "component": "span",
+                                                                                                "text": "验证并登录"
+                                                                                        }
+                                                                                ]
+                                                                        }
+                                                                ]
+                                                        }
+                                                ]
+                                        }
+                                ]
+                        }
+                ]
+        },
+        {
+                "component": "VCard",
+                "props": {
+                        "variant": "outlined"
+                },
+                "content": [
+                        {
+                                "component": "VCardTitle",
+                                "props": {
+                                        "class": "d-flex align-center"
+                                },
+                                "content": [
+                                        {
+                                                "component": "VIcon",
+                                                "props": {
+                                                        "icon": "mdi-help-circle",
+                                                        "color": "info",
+                                                        "class": "mr-2"
+                                                }
+                                        },
+                                        {
+                                                "component": "span",
+                                                "text": "使用说明"
+                                        }
+                                ]
+                        },
+                        {
+                                "component": "VDivider"
+                        },
+                        {
+                                "component": "VCardText",
+                                "content": [
+                                        {
+                                                "component": "VAlert",
+                                                "props": {
+                                                        "type": "info",
+                                                        "variant": "tonal",
+                                                        "density": "compact"
+                                                },
+                                                "content": [
+                                                        {
+                                                                "component": "div",
+                                                                "text": "1. 短信登录：填手机号→【发送验证码】→填验证码→【验证并登录】，token自动保存续期；2. token全留空则自动复用 GuangyaDisk 插件登录态；3. STRM链接：{server}/api/v1/plugin/GYAPStrmSelfuse/redirect_url?apikey={apikey}&name=文件名&size=大小&md5=MD5"
+                                                        }
+                                                ]
+                                        }
+                                ]
+                        }
+                ]
         }
+], {
+        "enabled": True,
+        "gyap_access_token": "",
+        "gyap_refresh_token": "",
+        "gyap_device_id": "",
+        "gyap_md5_dir": "我的秒传",
+        "gyap_sms_phone": "",
+        "gyap_sms_code": ""
+}
 
     def get_page(self) -> List[Dict[str, Any]]:
         """
