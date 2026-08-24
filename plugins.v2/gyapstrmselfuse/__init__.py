@@ -14,7 +14,7 @@ from app.plugins import _PluginBase
 from app.log import logger
 from app.helper.mdc import MDC
 
-from tool.tool import GuangyaAutoClient
+from .tool import GuangyaAutoClient
 
 
 class GYAPStrmSelfuse(_PluginBase):
