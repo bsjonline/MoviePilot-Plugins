@@ -12,6 +12,8 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.plugins import _PluginBase
 from app.log import logger
+from app.core.event import eventmanager, Event
+from app.schemas.types import EventType, MessageType
 
 from .tool import GuangyaAutoClient
 
@@ -28,7 +30,7 @@ class GYAPStrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "0.3.0"
+    plugin_version = "0.3.1"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -130,9 +132,129 @@ class GYAPStrmSelfuse(_PluginBase):
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
         """
-        返回插件远程命令列表
+        返回插件远程命令列表：短信登录发码/验证
         """
-        return []
+        return [
+            {
+                "cmd": "/gyap_send_code",
+                "event": EventType.PluginAction,
+                "desc": "光鸭云盘短信登录：发送验证码",
+                "category": "插件命令",
+                "data": {"action": "gyap_send_code"},
+            },
+            {
+                "cmd": "/gyap_verify_code",
+                "event": EventType.PluginAction,
+                "desc": "光鸭云盘短信登录：验证并登录",
+                "category": "插件命令",
+                "data": {"action": "gyap_verify_code"},
+            },
+        ]
+
+    @eventmanager.register(EventType.PluginAction)
+    def handle_sms_command(self, event: Event):
+        """
+        处理短信登录按钮点击：读取表单里的手机号/验证码执行对应步骤，结果通过系统消息通知
+        """
+        if not event or not event.event_data:
+            return
+        event_data = event.event_data
+        action = event_data.get("action") or ""
+        if action == "gyap_send_code":
+            self._command_send_code()
+        elif action == "gyap_verify_code":
+            self._command_verify_code()
+
+    def _form_value(self, key: str) -> str:
+        """
+        从当前插件配置读表单值（配置页保存后即可读到最新输入）
+        """
+        try:
+            cfg = self.get_config() or {}
+            return str(cfg.get(key, "") or "").strip()
+        except Exception:
+            return ""
+
+    def _command_send_code(self):
+        client = getattr(self, "_client", None)
+        if not self.get_state() or client is None:
+            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text="插件未启用或客户端未初始化")
+            return
+        phone = self._form_value("gyap_sms_phone")
+        if not phone:
+            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text="请先在配置页填写手机号并保存")
+            return
+        if not phone.startswith("+"):
+            phone = f"+86 {phone}"
+        try:
+            init_resp = client.login_sms_init(phone)
+            captcha_token = init_resp.get("captcha_token") or ""
+            if not captcha_token:
+                self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"人机验证失败: {init_resp}")
+                return
+            send_resp = client.login_sms_send(phone, captcha_token)
+            verification_id = send_resp.get("verification_id") or ""
+            if not verification_id:
+                self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"发送验证码失败: {send_resp}")
+                return
+            # 会话上下文暂存到插件数据（跨请求存活）
+            self.save_data("gyap_login_ctx", {
+                "phone": phone,
+                "captcha_token": captcha_token,
+                "verification_id": verification_id,
+            })
+            logger.info(f"【光鸭STRM】短信验证码已发送: {phone}")
+            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"验证码已发送到 {phone}，收到后填入验证码点【验证并登录】")
+        except Exception as e:
+            logger.error(f"【光鸭STRM】短信登录发码失败: {e}")
+            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"发码失败: {e}")
+
+    def _command_verify_code(self):
+        client = getattr(self, "_client", None)
+        if not self.get_state() or client is None:
+            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text="插件未启用或客户端未初始化")
+            return
+        ctx = None
+        try:
+            ctx = self.get_data("gyap_login_ctx")
+        except Exception:
+            pass
+        if not ctx or not ctx.get("verification_id"):
+            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text="请先点【发送验证码】")
+            return
+        code = self._form_value("gyap_sms_code")
+        if not code:
+            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text="请先在配置页填写短信验证码并保存")
+            return
+        try:
+            verify_resp = client.login_sms_verify(ctx["verification_id"], code)
+            verification_token = verify_resp.get("verification_token") or ""
+            if not verification_token:
+                self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"验证码校验失败: {verify_resp}")
+                return
+            signin_resp = client.login_sms_signin(
+                code=code,
+                verification_token=verification_token,
+                phone_number=ctx["phone"],
+                captcha_token=ctx["captcha_token"],
+            )
+            if not signin_resp.get("access_token"):
+                self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"登录失败: {signin_resp}")
+                return
+            # 清理会话上下文；token 已由刷新回调自动持久化
+            try:
+                self.del_data("gyap_login_ctx")
+            except Exception:
+                pass
+            logger.info(f"【光鸭STRM】短信登录成功，token 已持久化 (phone={ctx['phone']})")
+            self.post_message(
+                mtype=MessageType.Plugin,
+                title="光鸭云盘STRM",
+                text=f"登录成功！token 已保存（有效期{signin_resp.get('expires_in', '?')}秒），后续自动刷新续期",
+            )
+        except Exception as e:
+            logger.error(f"【光鸭STRM】短信登录失败: {e}")
+            self.post_message(mtype=MessageType.Plugin, title="光鸭云盘STRM", text=f"登录失败: {e}")
 
     def get_api(self) -> List[Dict[str, Any]]:
         """
@@ -444,7 +566,107 @@ class GYAPStrmSelfuse(_PluginBase):
                                 ],
                             },
                         ],
-                    }
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "density": "compact",
+                                            "class": "mb-2",
+                                        },
+                                        "content": [
+                                            {
+                                                "component": "div",
+                                                "text": "短信登录（TgtoDrive同款）：填手机号→点【发送验证码】→收到短信后填验证码→点【验证并登录】。登录成功后 token 自动保存，后续自动刷新续期，无需再手动维护。",
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "gyap_sms_phone",
+                                            "label": "手机号（含+86）",
+                                            "placeholder": "+86 13800138000",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 2},
+                                "content": [
+                                    {
+                                        "component": "VBtn",
+                                        "props": {
+                                            "color": "primary",
+                                            "variant": "flat",
+                                            "block": True,
+                                        },
+                                        "events": {
+                                            "click": "/gyap_send_code"
+                                        },
+                                        "content": [
+                                            {
+                                                "component": "span",
+                                                "text": "发送验证码",
+                                            }
+                                        ],
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "gyap_sms_code",
+                                            "label": "短信验证码",
+                                            "placeholder": "6位数字",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VBtn",
+                                        "props": {
+                                            "color": "success",
+                                            "variant": "flat",
+                                            "block": True,
+                                        },
+                                        "events": {
+                                            "click": "/gyap_verify_code"
+                                        },
+                                        "content": [
+                                            {
+                                                "component": "span",
+                                                "text": "验证并登录",
+                                            }
+                                        ],
+                                    }
+                                ],
+                            },
+                        ],
+                    },
                 ],
             }
         ], {
@@ -453,6 +675,8 @@ class GYAPStrmSelfuse(_PluginBase):
             "gyap_refresh_token": "",
             "gyap_device_id": "",
             "gyap_md5_dir": "我的秒传",
+            "gyap_sms_phone": "",
+            "gyap_sms_code": "",
         }
 
     def get_page(self) -> List[Dict[str, Any]]:

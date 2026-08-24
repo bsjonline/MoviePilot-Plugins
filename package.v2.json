@@ -71,7 +71,7 @@
     "name": "gyapstrmselfuse",
     "description": "光鸭云盘STRM生成一条龙服务",
     "labels": "云盘",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "icon": "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png",
     "author": "bsjonline",
     "level": 1,
@@ -81,7 +81,8 @@
       "v0.2.1": "修复安装后不显示: 移除不存在的app.helper.mdc导入(import失败导致加载被跳过)",
       "v0.2.2": "修复配置项打不开: get_form改为返回(表单,默认数据dict)二元组",
       "v0.2.3": "Token留空时自动读取GuangyaDisk插件登录态，扫码刷新后无需手动同步",
-      "v0.3.0": "TgtoDrive同款手机号短信登录+token自动刷新持久化，支持仅refresh_token运行"
+      "v0.3.0": "TgtoDrive同款手机号短信登录+token自动刷新持久化，支持仅refresh_token运行",
+      "v0.3.1": "配置页新增短信登录UI(手机号/发码/验证码/登录按钮)"
     },
     "system_version": ">=2.13.0"
   }
