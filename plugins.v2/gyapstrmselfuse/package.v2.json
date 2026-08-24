@@ -2,7 +2,7 @@
   "GYAPStrmSelfuse": {
     "name": "gyapstrmselfuse",
     "title": "光鸭云盘 STRM 助手",
-    "description": "基于 GCID 秒传播放，尽量不用转存",
+    "description": "MD5秒传播放，STRM不含file_id",
     "author": "bsjonline",
     "homepage": "https://github.com/bsjonline/MoviePilot-Plugins",
     "repository": "https://github.com/bsjonline/MoviePilot-Plugins",
@@ -10,9 +10,14 @@
     "label": "光鸭云盘",
     "vender": "MoviePilot-Plugins-Custom",
     "system_version": ">=2.13.0",
-    "description_en": "Guangya Cloud Drive STRM helper, play via rapid import by gcid",
-    "description_zh": "基于 GCID 秒传播放，尽量不用转存。STRM 中只保留 gcid，播放时通过 rapid import 秒传获取 file_id 再 302 播放。",
+    "description_en": "Guangya Cloud Drive STRM helper, play via MD5 rapid import, no file_id in STRM",
+    "description_zh": "基于 MD5 秒传（服务端库存查询）播放。STRM 中只保留 md5+size+name，播放时临时解析 fileId 并 302 到签名直链。",
     "changelog": [
+      {
+        "version": "0.2.0",
+        "date": "2026-08-24",
+        "content": "重写秒传链路：改用 MD5+size 查询光鸭服务端库存（code 156 命中），对齐批量助手V4；秒传目录复用已有文件；未命中自动清理上传任务；STRM 参数从 gcid 改为 md5"
+      },
       {
         "version": "0.1.0",
         "date": "2026-08-09",
