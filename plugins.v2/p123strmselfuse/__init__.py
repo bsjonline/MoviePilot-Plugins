@@ -591,7 +591,7 @@ class P123StrmSelfuse(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/bsjonline/MoviePilot-Plugins/main/icons/P123Disk.png"
     # 插件版本
-    plugin_version = "1.5.4"
+    plugin_version = "1.5.5"
     # 插件作者
     plugin_author = "bsjonline"
     # 作者主页
@@ -735,7 +735,6 @@ class P123StrmSelfuse(_PluginBase):
                 )
         except Exception as e:
             logger.error(f"【插件初始化】获取用户ID失败: {e}")
-            self._client = None
             self._uid = ""
 
         # 停止现有任务
